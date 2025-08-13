@@ -64,6 +64,23 @@ export default function App(){
 
   useEffect(()=>{ fetchBeans(); fetchDrips(); fetchStats(); }, [])
 
+    const corr = (pairs: Array<[number, number]>)=>{
+    const xs = pairs.map(p=>p[0]).filter(v=>Number.isFinite(v))
+    const ys = pairs.map(p=>p[1]).filter((_,i)=>Number.isFinite(pairs[i][0]) && Number.isFinite(pairs[i][1]))
+    const n = Math.min(xs.length, ys.length)
+    if(n===0) return null
+    const mx = xs.reduce((a,b)=>a+b,0)/n
+    const my = ys.reduce((a,b)=>a+b,0)/n
+    let num=0, dx2=0, dy2=0
+    for(let i=0;i<n;i++){
+      const dx = xs[i]-mx, dy = ys[i]-my
+      num += dx*dy; dx2 += dx*dx; dy2 += dy*dy
+    }
+    const den = Math.sqrt(dx2*dy2)
+    return den===0 ? null : (num/den)
+  }
+
+
   // 全体相関用：各ドリップに temp_delta/time_delta を付与
   const dripsWithDeltas = useMemo(()=>{
     return drips.map((d:any)=>{
@@ -81,6 +98,26 @@ export default function App(){
       return { ...d, _deltas: { temp_delta: tempDelta, time_delta: timeDelta } }
     })
   }, [drips])
+    const pairsTempAll = React.useMemo(()=>{
+    return dripsWithDeltas
+      .map((d:any)=> [d?._deltas?.temp_delta, d?.ratings?.[yMetric]] as [number,number])
+      .filter(([x,y])=> Number.isFinite(x) && Number.isFinite(y))
+  },[dripsWithDeltas, yMetric])
+
+  const pairsTimeAll = React.useMemo(()=>{
+    return dripsWithDeltas
+      .map((d:any)=> [d?._deltas?.time_delta, d?.ratings?.[yMetric]] as [number,number])
+      .filter(([x,y])=> Number.isFinite(x) && Number.isFinite(y))
+  },[dripsWithDeltas, yMetric])
+
+  const rTempAll = React.useMemo(()=> {
+    const v = corr(pairsTempAll); return (v==null? null : Math.round(v*100)/100)
+  },[pairsTempAll])
+
+  const rTimeAll = React.useMemo(()=> {
+    const v = corr(pairsTimeAll); return (v==null? null : Math.round(v*100)/100)
+  },[pairsTimeAll])
+
 
   return (
     <div className="mx-auto max-w-5xl p-4 space-y-8">
@@ -142,7 +179,11 @@ export default function App(){
       <section className="grid lg:grid-cols-2 gap-6">
         {/* 湯温差 vs 評価（全体） */}
         <div className="p-4 bg-white rounded-2xl shadow">
-          <h3 className="font-semibold mb-2">全体：湯温差（実測−推奨） vs {yLabel}</h3>
+          <h3 className="font-semibold mb-2">
+  全体：湯温差（実測−推奨） vs {yLabel}
+  <span className="ml-2 text-xs text-gray-500">r={rTempAll ?? '—'}</span>
+</h3>
+
           <div className="h-64">
             <ResponsiveContainer>
               <ScatterChart>
@@ -158,7 +199,11 @@ export default function App(){
 
         {/* 時間差 vs 評価（全体） */}
         <div className="p-4 bg-white rounded-2xl shadow">
-          <h3 className="font-semibold mb-2">全体：時間差（実測秒−推奨秒） vs {yLabel}</h3>
+          <h3 className="font-semibold mb-2">
+  全体：時間差（実測秒−推奨秒） vs {yLabel}
+  <span className="ml-2 text-xs text-gray-500">r={rTimeAll ?? '—'}</span>
+</h3>
+
           <div className="h-64">
             <ResponsiveContainer>
               <ScatterChart>
