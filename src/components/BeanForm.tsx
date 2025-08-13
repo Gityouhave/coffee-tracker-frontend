@@ -1,3 +1,4 @@
+// src/components/BeanForm.tsx
 import React, { useEffect, useState } from 'react'
 import { ORIGINS } from '../constants/origins'
 import { ORIGIN_THEORIES } from '../constants/originTheories'
@@ -17,7 +18,7 @@ type Bean = any
 export function BeanForm({API, onSaved}:{API:string; onSaved:()=>void}){
   const [form, setForm] = useState<any>({
     name:'', roast_level:'シティ', in_stock:true,
-    origins: [] as string[], // 複数産地
+    origins: [] as string[], // 複数産地（ブレンド対応）
     process:'不明', addl_process:'', variety:'', roast_date:'', price_yen:'', weight_g:'',
     taste_memo:'', brew_policy:''
   })
@@ -61,15 +62,6 @@ export function BeanForm({API, onSaved}:{API:string; onSaved:()=>void}){
 
   // 必須チェック（追加処理・品種・テイスト・方針 以外は必須）
   const validate = ()=>{
-    const need = {
-      name: '豆の名前',
-      roast_level: '焙煎度',
-      origins: '産地',
-      process: '精製',
-      roast_date: '焙煎日（購入日）',
-      price_yen: '値段(円)',
-      weight_g: '量(g)'
-    } as const
     if (!form.name) return '豆の名前'
     if (!form.roast_level) return '焙煎度'
     if (!form.origins?.length) return '産地'
@@ -89,7 +81,7 @@ export function BeanForm({API, onSaved}:{API:string; onSaved:()=>void}){
       name: form.name,
       roast_level: form.roast_level,
       in_stock: !!form.in_stock,
-      origin: form.origins.join(','), // ← 文字列で保存
+      origin: form.origins.join(','), // ← 複数産地を文字列で保存（ブレンド対応）
       process: form.process,
       addl_process: form.addl_process || null,
       variety: form.variety || null,
@@ -123,11 +115,16 @@ export function BeanForm({API, onSaved}:{API:string; onSaved:()=>void}){
         {/* 産地：複数選択（ブレンド対応） */}
         <div>
           <label className="text-sm text-gray-600">産地（複数可・必須）</label>
-          <select multiple className="border rounded p-2 w-full h-28"
-                  value={form.origins} onChange={e=>{
-                    const opts = Array.from(e.target.selectedOptions).map(o=>o.value)
-                    handle('origins', opts)
-                  }} required>
+          <select
+            multiple
+            className="border rounded p-2 w-full h-28"
+            value={form.origins}
+            onChange={e=>{
+              const opts = Array.from(e.target.selectedOptions).map(o=>o.value)
+              handle('origins', opts)
+            }}
+            required
+          >
             {ORIGINS.filter(o=>o!=='不明').map(o=> <option key={o} value={o}>{o}</option>)}
             <option value="不明">不明</option>
           </select>
@@ -143,9 +140,11 @@ export function BeanForm({API, onSaved}:{API:string; onSaved:()=>void}){
         </div>
 
         <div className="grid grid-cols-2 gap-2">
+          {/* 精製（必須） */}
           <select className="border rounded p-2" value={form.process} onChange={e=>handle('process',e.target.value)} required>
             {PROCESS_OPTIONS.map(x=> <option key={x} value={x}>{x}</option>)}
           </select>
+          {/* 追加処理（任意） */}
           <select className="border rounded p-2" value={form.addl_process} onChange={e=>handle('addl_process',e.target.value)}>
             {ADDL_PROCESS_OPTIONS.map(x=> <option key={x} value={x}>{x||'追加処理なし'}</option>)}
           </select>
