@@ -57,7 +57,7 @@ export default function App(){
         </div>
       </section>
 
-      {/* 下段：全体統計（棒/散布） */}
+           {/* 下段：全体統計（棒/散布） */}
       <section className="grid lg:grid-cols-2 gap-6">
         <div className="p-4 bg-white rounded-2xl shadow">
           <h3 className="font-semibold mb-2">3) 統計（全体）</h3>
@@ -76,6 +76,7 @@ export default function App(){
           </div>
         </div>
 
+        {/* レシオ差 vs 総合評価 */}
         <div className="p-4 bg-white rounded-2xl shadow">
           <h3 className="font-semibold mb-2">最近のドリップ（評価 vs レシオ差）</h3>
           <div className="h-64">
@@ -83,6 +84,41 @@ export default function App(){
               <ScatterChart>
                 <CartesianGrid />
                 <XAxis dataKey="derived.deltas.ratio_delta" name="ratioΔ" />
+                <YAxis dataKey="ratings.overall" name="overall" />
+                <Tooltip />
+                <Scatter name="drips" data={drips} />
+              </ScatterChart>
+            </ResponsiveContainer>
+          </div>
+        </div>
+      </section>
+
+      {/* 追加：湯温差 / 時間差 の散布図 */}
+      <section className="grid lg:grid-cols-2 gap-6">
+        {/* 湯温差 vs 総合評価 */}
+        <div className="p-4 bg-white rounded-2xl shadow">
+          <h3 className="font-semibold mb-2">最近のドリップ（評価 vs 湯温差）</h3>
+          <div className="h-64">
+            <ResponsiveContainer>
+              <ScatterChart>
+                <CartesianGrid />
+                <XAxis dataKey="derived.deltas.temp_delta" name="tempΔ(°C)" />
+                <YAxis dataKey="ratings.overall" name="overall" />
+                <Tooltip />
+                <Scatter name="drips" data={drips} />
+              </ScatterChart>
+            </ResponsiveContainer>
+          </div>
+        </div>
+
+        {/* 時間差 vs 総合評価 */}
+        <div className="p-4 bg-white rounded-2xl shadow">
+          <h3 className="font-semibold mb-2">最近のドリップ（評価 vs 時間差）</h3>
+          <div className="h-64">
+            <ResponsiveContainer>
+              <ScatterChart>
+                <CartesianGrid />
+                <XAxis dataKey="derived.deltas.time_delta" name="timeΔ(s)" />
                 <YAxis dataKey="ratings.overall" name="overall" />
                 <Tooltip />
                 <Scatter name="drips" data={drips} />
