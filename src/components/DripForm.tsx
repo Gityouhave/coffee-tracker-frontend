@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from 'react'
+import React, { useEffect, useState } from 'react'
 
 export function DripForm({API, beans, onSaved}:{API:string; beans:any[]; onSaved:()=>void}){
   const [form,setForm] = useState<any>({ ratings:{} })
@@ -16,10 +16,11 @@ export function DripForm({API, beans, onSaved}:{API:string; beans:any[]; onSaved
     if(form.dose_g) params.set('dose_g', form.dose_g)
     if(form.water_g) params.set('water_g', form.water_g)
     if(form.water_temp_c) params.set('water_temp_c', form.water_temp_c)
-    if(form.dripper) params.set('dripper', form.dripper)
+    if(form.dripper) params.set('dripper', form.dripper)   // ← 追加
+
     fetch(`${API}/api/derive?`+params.toString())
       .then(r=>r.json()).then(setDerive)
-  },[form.bean_id, form.grind, form.dose_g, form.water_g, form.water_temp_c,form.dripper])
+  },[form.bean_id, form.grind, form.dose_g, form.water_g, form.water_temp_c, form.dripper]) // ← 追加
 
   const submit = async (e:any)=>{
     e.preventDefault()
@@ -92,12 +93,11 @@ export function DripForm({API, beans, onSaved}:{API:string; beans:any[]; onSaved
         <div className="text-sm bg-gray-50 border rounded p-2 space-y-1">
           <div>ドリッパー理論：{derive.theory?.dripper ?? '-'}</div>
           <div>挽き目20段階表記：<b>{derive.grind?.label20 ?? '-'}</b></div>
-          <div>挽き目表記：<b>{derive.grind?.label ?? '-'}</b></div>
           <div>推奨湯温：{derive.temp?.recommended_c ?? '-'}℃（Δ {derive.temp?.delta_from_input ?? '—'}）</div>
           <div>推奨レシオ：{derive.ratio?.recommended_ratio ?? '-'}倍 → 推奨湯量 {derive.ratio?.recommended_water_g ?? '-'}g（Δ {derive.ratio?.delta_from_input ?? '—'}）</div>
           <div>推奨所要時間：{derive.time?.recommended_sec ?? '-'}秒</div>
           {derive.price && <div>費用見積：{derive.price.estimated_cost_yen} 円（単価 {derive.price.price_per_g} 円/g）</div>}
-          <div className="text-xs text-gray-500">※焙煎度によって自動導出</div>
+          <div className="text-xs text-gray-500">※焙煎度・入力値から自動導出</div>
         </div>
       )}
 
