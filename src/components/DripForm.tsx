@@ -135,10 +135,10 @@ const optionLabel = (b:any)=>{
       {/* セレクト直下：豆セオリー + 豆ごと統計（ドリップ前に参照） */}
       <div className="bg-gray-50 border rounded p-2 space-y-2 text-sm">
         <div className="font-semibold">選択豆：{selBean?.name ?? '--'}</div>
-        <div>産地セオリー：{ showOrDash(!!form.bean_id, theoryWithValue(derive?.theory?.origin, selBean?.origin)) }</div>
-        <div>精製セオリー：{ showOrDash(!!form.bean_id, theoryWithValue(derive?.theory?.process, selBean?.process)) }</div>
-        <div>追加処理：{ showOrDash(!!form.bean_id, theoryWithValue(derive?.theory?.addl_process, selBean?.addl_process)) }</div>
-        <div className="text-xs text-gray-500">※選択値＋セオリーを括弧で併記</div>
+<div>産地セオリー：{ showOrDash(!!form.bean_id, theoryWithValue(derive?.theory?.origin, selBean?.origin)) }</div>
+<div>精製セオリー：{ showOrDash(!!form.bean_id, theoryWithValue(derive?.theory?.process, selBean?.process)) }</div>
+<div>追加処理セオリー：{ showOrDash(!!form.bean_id, theoryWithValue(derive?.theory?.addl_process, selBean?.addl_process)) }</div>
+<div className="text-xs text-gray-500">※「選択値（セオリー）」の形式で表示</div>
                 <div className="text-sm">平均評価（★）：<StarRow avg={beanStats?.avg_overall} /></div>
         {/* レーダーチャート（6項目平均） */}
 <div className="h-48">
