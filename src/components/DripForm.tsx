@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react'
-import { ResponsiveContainer, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend } from 'recharts'
+import { ResponsiveContainer, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, RadarChart, PolarGrid, PolarAngleAxis, PolarRadiusAxis, Radar } from 'recharts'
 
 export function DripForm({API, beans, onSaved}:{API:string; beans:any[]; onSaved:()=>void}){
   const [form,setForm] = useState<any>({ ratings:{} })
@@ -27,6 +27,36 @@ export function DripForm({API, beans, onSaved}:{API:string; beans:any[]; onSaved
   useEffect(()=>{
     if(!form.bean_id){ setBeanStats(null); return }
     fetch(`${API}/api/stats?scope=bean&bean_id=${form.bean_id}`).then(r=>r.json()).then(setBeanStats)
+  },[form.bean_id, API])
+
+  const [beanDrips, setBeanDrips] = useState<any[]>([])
+  const [radarData, setRadarData] = useState<any[]>([])
+
+  // ---- 豆ごとのドリップを取得してレーダー用に集計
+  useEffect(()=>{
+    if(!form.bean_id){ setBeanDrips([]); setRadarData([]); return }
+    ;(async ()=>{
+      const r = await fetch(`${API}/api/drips`)
+      const all = await r.json()
+      const mine = all.filter((d:any)=> String(d.bean_id)===String(form.bean_id))
+      setBeanDrips(mine)
+
+      const keys = [
+        {key:'clean', label:'クリーンさ'},
+        {key:'flavor', label:'風味'},
+        {key:'acidity', label:'酸味'},
+        {key:'bitterness', label:'苦味'},
+        {key:'sweetness', label:'甘味'},
+        {key:'body', label:'コク'},
+        {key:'aftertaste', label:'後味'},
+      ]
+      const data = keys.map(k=>{
+        const vals = mine.map((d:any)=> d.ratings?.[k.key]).filter((x:any)=> typeof x==='number')
+        const avg = vals.length? (vals.reduce((a:number,b:number)=>a+b,0)/vals.length) : null
+        return { subject: k.label, value: avg??0 }
+      })
+      setRadarData(data)
+    })()
   },[form.bean_id, API])
 
   const submit = async (e:any)=>{
@@ -108,6 +138,19 @@ export function DripForm({API, beans, onSaved}:{API:string; beans:any[]; onSaved
         <div>追加処理：{ showOrDash(!!form.bean_id, theoryWithValue(derive?.theory?.addl_process, selBean?.addl_process)) }</div>
         <div className="text-xs text-gray-500">※選択値＋セオリーを括弧で併記</div>
                 <div className="text-sm">平均評価（★）：<StarRow avg={beanStats?.avg_overall} /></div>
+        {/* レーダーチャート（6項目平均） */}
+<div className="h-48">
+  <ResponsiveContainer>
+    <RadarChart data={radarData}>
+      <PolarGrid />
+      <PolarAngleAxis dataKey="subject" />
+      <PolarRadiusAxis angle={30} domain={[0, 10]} />
+      <Radar name="avg" dataKey="value" stroke="" fill="" fillOpacity={0.3} />
+      <Tooltip />
+    </RadarChart>
+  </ResponsiveContainer>
+</div>
+
 
         {/* 豆ごと統計（棒グラフ＆サマリ） */}
         <div className="text-xs">記録数：{beanStats?.count ?? (form.bean_id ? '—' : '--')}　
