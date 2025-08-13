@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react'
 import { BeanForm } from '../components/BeanForm'
 import { DripForm } from '../components/DripForm'
+import MissingOrigins from '../components/MissingOrigins'
 import { ResponsiveContainer, ScatterChart, Scatter, XAxis, YAxis, CartesianGrid, Tooltip, BarChart, Bar, Legend } from 'recharts'
 
 const API = import.meta.env.VITE_BACKEND_URL || 'https://<your-username>.pythonanywhere.com'
@@ -40,6 +41,7 @@ export default function App(){
         <div className="p-4 bg-white rounded-2xl shadow">
           <h2 className="font-semibold mb-2">1) コーヒー豆</h2>
           <BeanForm API={API} onSaved={()=>{fetchBeans()}} />
+          <MissingOrigins API={API} />
         </div>
 
         <div className="p-4 bg-white rounded-2xl shadow">
