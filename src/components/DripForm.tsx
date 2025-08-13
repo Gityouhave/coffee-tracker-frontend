@@ -144,6 +144,23 @@ export function DripForm({API, beans, onSaved}:{API:string; beans:any[]; onSaved
     const s = Math.round(Number(avg)/2)
     return (<span aria-label={`rating ${s} of 5`}>{'★★★★★'.slice(0,s)}{'☆☆☆☆☆'.slice(0,5-s)} <span className="text-[11px] text-gray-500">({avg})</span></span>)
   }
+    // Pearson 相関係数 r（x,y の配列から計算）
+  const corr = (pairs: Array<[number, number]>)=>{
+    const xs = pairs.map(p=>p[0]).filter(v=>Number.isFinite(v))
+    const ys = pairs.map(p=>p[1]).filter((_,i)=>Number.isFinite(pairs[i][0]) && Number.isFinite(pairs[i][1]))
+    const n = Math.min(xs.length, ys.length)
+    if(n===0) return null
+    const mx = xs.reduce((a,b)=>a+b,0)/n
+    const my = ys.reduce((a,b)=>a+b,0)/n
+    let num=0, dx2=0, dy2=0
+    for(let i=0;i<n;i++){
+      const dx = xs[i]-mx, dy = ys[i]-my
+      num += dx*dy; dx2 += dx*dx; dy2 += dy*dy
+    }
+    const den = Math.sqrt(dx2*dy2)
+    return den===0 ? null : (num/den)
+  }
+
   const optionLabel = (b:any)=>{
     const parts:string[] = []
     if (b.name) parts.push(b.name)
@@ -166,6 +183,26 @@ export function DripForm({API, beans, onSaved}:{API:string; beans:any[]; onSaved
     key: `ratings.${yMetric}`,
     label: yMetric === 'overall' ? '総合' : (yMetric==='clean'?'クリーンさ':(yMetric==='flavor'?'風味':'コク'))
   }),[yMetric])
+    const beanPairsTemp = React.useMemo(()=>{
+    return beanDrips
+      .map((d:any)=> [d?._deltas?.temp_delta, d?.ratings?.[yMetric]] as [number,number])
+      .filter(([x,y])=> Number.isFinite(x) && Number.isFinite(y))
+  },[beanDrips, yMetric])
+
+  const beanPairsTime = React.useMemo(()=>{
+    return beanDrips
+      .map((d:any)=> [d?._deltas?.time_delta, d?.ratings?.[yMetric]] as [number,number])
+      .filter(([x,y])=> Number.isFinite(x) && Number.isFinite(y))
+  },[beanDrips, yMetric])
+
+  const rTempBean = React.useMemo(()=> {
+    const v = corr(beanPairsTemp); return (v==null? null : Math.round(v*100)/100)
+  },[beanPairsTemp])
+
+  const rTimeBean = React.useMemo(()=> {
+    const v = corr(beanPairsTime); return (v==null? null : Math.round(v*100)/100)
+  },[beanPairsTime])
+
 
   return (
     <form onSubmit={submit} className="space-y-4">
@@ -232,7 +269,11 @@ export function DripForm({API, beans, onSaved}:{API:string; beans:any[]; onSaved
 
         {/* 湯温差 vs 評価 */}
         <div>
-          <div className="font-semibold mb-1">湯温差（実測−推奨） vs {yAccessor.label}</div>
+          <div className="font-semibold mb-1">
+  湯温差（実測−推奨） vs {yAccessor.label}
+  <span className="ml-2 text-xs text-gray-500">r={rTempBean ?? '—'}</span>
+</div>
+
           <div className="h-44">
             <ResponsiveContainer>
               <ScatterChart>
@@ -248,7 +289,11 @@ export function DripForm({API, beans, onSaved}:{API:string; beans:any[]; onSaved
 
         {/* 時間差 vs 評価 */}
         <div>
-          <div className="font-semibold mb-1">時間差（実測秒−推奨秒） vs {yAccessor.label}</div>
+         <div className="font-semibold mb-1">
+  時間差（実測秒−推奨秒） vs {yAccessor.label}
+  <span className="ml-2 text-xs text-gray-500">r={rTimeBean ?? '—'}</span>
+</div>
+
           <div className="h-44">
             <ResponsiveContainer>
               <ScatterChart>
