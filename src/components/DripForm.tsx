@@ -1,25 +1,22 @@
 import React, { useEffect, useMemo, useState } from 'react'
-import { ResponsiveContainer, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, RadarChart, PolarGrid, PolarAngleAxis, PolarRadiusAxis, Radar, ScatterChart, Scatter } from 'recharts'
+import {
+  ResponsiveContainer, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend,
+  RadarChart, PolarGrid, PolarAngleAxis, PolarRadiusAxis, Radar,
+  ScatterChart, Scatter
+} from 'recharts'
 
-/** 焙煎度→推奨湯温（℃）: ライト 92.5 → イタリアン 75（2.5℃刻みの8段） */
+/** 焙煎度→推奨湯温（℃） */
 const ROAST_TEMP: Record<string, number> = {
   'ライト': 92.5, 'シナモン': 90.0, 'ミディアム': 87.5, 'ハイ': 85.0,
   'シティ': 82.5, 'フルシティ': 80.0, 'フレンチ': 77.5, 'イタリアン': 75.0
 }
-  // 日付差（日）を計算（yyyy-mm-dd 文字列想定）
-  const daysBetween = (from?: string|null, to?: string|null) => {
-    if (!from || !to) return null
-    const a = new Date(from + 'T00:00:00')
-    const b = new Date(to + 'T00:00:00')
-    const ms = b.getTime() - a.getTime()
-    return Math.floor(ms / (1000*60*60*24))
-  }
 
 /** 粒度グループ→推奨時間（秒） */
 const GRIND_TIME: Record<string, number> = {
   '粗': 210, '中粗': 180, '中': 120, '中細': 90, '細': 60, '極細': 40
 }
-/** derive.grind.label20 を 6グループに正規化 */
+
+/** 20段階ラベル → 6グループ */
 const toGrindGroup = (label20?: string|null) => {
   if (!label20) return null
   if (label20.startsWith('粗')) return '粗'
@@ -30,6 +27,7 @@ const toGrindGroup = (label20?: string|null) => {
   if (label20 === '極細') return '極細'
   return null
 }
+
 /** mm:ss → 秒 */
 const toSec = (mmss?: string|null) => {
   if (!mmss) return null
@@ -38,6 +36,32 @@ const toSec = (mmss?: string|null) => {
   const min = Number(m[0]), sec = Number(m[1])
   if (isNaN(min) || isNaN(sec)) return null
   return min*60 + sec
+}
+
+/** 日付差（日） "yyyy-mm-dd" 前提 */
+const daysBetween = (from?: string|null, to?: string|null) => {
+  if (!from || !to) return null
+  const a = new Date(from + 'T00:00:00')
+  const b = new Date(to + 'T00:00:00')
+  const ms = b.getTime() - a.getTime()
+  return Math.floor(ms / (1000*60*60*24))
+}
+
+/** Pearson 相関係数 */
+const corr = (pairs: Array<[number, number]>)=>{
+  const xs = pairs.map(p=>p[0]).filter(v=>Number.isFinite(v))
+  const ys = pairs.map(p=>p[1]).filter((_,i)=>Number.isFinite(pairs[i][0]) && Number.isFinite(pairs[i][1]))
+  const n = Math.min(xs.length, ys.length)
+  if(n===0) return null
+  const mx = xs.reduce((a,b)=>a+b,0)/n
+  const my = ys.reduce((a,b)=>a+b,0)/n
+  let num=0, dx2=0, dy2=0
+  for(let i=0;i<n;i++){
+    const dx = xs[i]-mx, dy = ys[i]-my
+    num += dx*dy; dx2 += dx*dx; dy2 += dy*dy
+  }
+  const den = Math.sqrt(dx2*dy2)
+  return den===0 ? null : (num/den)
 }
 
 export function DripForm({API, beans, onSaved}:{API:string; beans:any[]; onSaved:()=>void}){
@@ -51,7 +75,7 @@ export function DripForm({API, beans, onSaved}:{API:string; beans:any[]; onSaved
   const handle = (k:string,v:any)=> setForm((s:any)=> ({...s,[k]:v}))
   const handleRating = (k:string,v:any)=> setForm((s:any)=> ({...s, ratings:{...s.ratings, [k]:v}}))
 
-  // derive（セオリー/推奨/挽き目表記）
+  // セオリー/推奨/挽き目表記（brew_date 変更でも aging を再計算させたいので依存に含める）
   useEffect(()=>{
     const bean_id = form.bean_id
     if(!bean_id){ setDerive(null); return }
@@ -62,8 +86,9 @@ export function DripForm({API, beans, onSaved}:{API:string; beans:any[]; onSaved
     if(form.water_g) params.set('water_g', form.water_g)
     if(form.water_temp_c) params.set('water_temp_c', form.water_temp_c)
     if(form.dripper) params.set('dripper', form.dripper)
+    if(form.brew_date) params.set('brew_date', form.brew_date) // aging_days を API 側で使う場合に備え
     fetch(`${API}/api/derive?`+params.toString()).then(r=>r.json()).then(setDerive)
-  },[form.bean_id, form.grind, form.dose_g, form.water_g, form.water_temp_c, form.dripper, API])
+  },[form.bean_id, form.grind, form.dose_g, form.water_g, form.water_temp_c, form.dripper, form.brew_date, API])
 
   // 豆ごと統計
   useEffect(()=>{
@@ -79,7 +104,7 @@ export function DripForm({API, beans, onSaved}:{API:string; beans:any[]; onSaved
       const all = await r.json()
       const mine = all.filter((d:any)=> String(d.bean_id)===String(form.bean_id))
 
-      // レーダー用
+      // レーダー（豆ごと平均）
       const keys = [
         {key:'clean', label:'クリーンさ'},
         {key:'flavor', label:'風味'},
@@ -96,8 +121,8 @@ export function DripForm({API, beans, onSaved}:{API:string; beans:any[]; onSaved
       })
       setRadarData(rd)
 
-      // 相関用：焙煎度から推奨湯温、粒度から推奨時間を作って差分を付与
-      const mineWithDeltas = mine.map((d:any)=>{
+      // 相関用差分付与
+      const withDeltas = mine.map((d:any)=>{
         const roast = d.bean?.roast_level ?? d.roast_level ?? 'シティ'
         const recTemp = ROAST_TEMP[roast] ?? 82.5
         const tempDelta = (typeof d.water_temp_c === 'number') ? (d.water_temp_c - recTemp) : null
@@ -108,12 +133,9 @@ export function DripForm({API, beans, onSaved}:{API:string; beans:any[]; onSaved
         const actSec = toSec(d.time)
         const timeDelta = (actSec!=null && recTime!=null) ? (actSec - recTime) : null
 
-        return {
-          ...d,
-          _deltas: { temp_delta: tempDelta, time_delta: timeDelta }
-        }
+        return { ...d, _deltas: { temp_delta: tempDelta, time_delta: timeDelta } }
       })
-      setBeanDrips(mineWithDeltas)
+      setBeanDrips(withDeltas)
     })()
   },[form.bean_id, API])
 
@@ -153,23 +175,6 @@ export function DripForm({API, beans, onSaved}:{API:string; beans:any[]; onSaved
     const s = Math.round(Number(avg)/2)
     return (<span aria-label={`rating ${s} of 5`}>{'★★★★★'.slice(0,s)}{'☆☆☆☆☆'.slice(0,5-s)} <span className="text-[11px] text-gray-500">({avg})</span></span>)
   }
-    // Pearson 相関係数 r（x,y の配列から計算）
-  const corr = (pairs: Array<[number, number]>)=>{
-    const xs = pairs.map(p=>p[0]).filter(v=>Number.isFinite(v))
-    const ys = pairs.map(p=>p[1]).filter((_,i)=>Number.isFinite(pairs[i][0]) && Number.isFinite(pairs[i][1]))
-    const n = Math.min(xs.length, ys.length)
-    if(n===0) return null
-    const mx = xs.reduce((a,b)=>a+b,0)/n
-    const my = ys.reduce((a,b)=>a+b,0)/n
-    let num=0, dx2=0, dy2=0
-    for(let i=0;i<n;i++){
-      const dx = xs[i]-mx, dy = ys[i]-my
-      num += dx*dy; dx2 += dx*dx; dy2 += dy*dy
-    }
-    const den = Math.sqrt(dx2*dy2)
-    return den===0 ? null : (num/den)
-  }
-
   const optionLabel = (b:any)=>{
     const parts:string[] = []
     if (b.name) parts.push(b.name)
@@ -187,31 +192,29 @@ export function DripForm({API, beans, onSaved}:{API:string; beans:any[]; onSaved
     return '—'
   }
 
-  // 豆ごと散布図の Y 指標切替（overall/clean/flavor/body）
+  // 指標切替
   const yAccessor = useMemo(()=>({
     key: `ratings.${yMetric}`,
     label: yMetric === 'overall' ? '総合' : (yMetric==='clean'?'クリーンさ':(yMetric==='flavor'?'風味':'コク'))
   }),[yMetric])
-    const beanPairsTemp = React.useMemo(()=>{
+
+  // 豆ごと相関ペア & r
+  const beanPairsTemp = useMemo(()=>{
     return beanDrips
       .map((d:any)=> [d?._deltas?.temp_delta, d?.ratings?.[yMetric]] as [number,number])
       .filter(([x,y])=> Number.isFinite(x) && Number.isFinite(y))
   },[beanDrips, yMetric])
-
-  const beanPairsTime = React.useMemo(()=>{
+  const beanPairsTime = useMemo(()=>{
     return beanDrips
       .map((d:any)=> [d?._deltas?.time_delta, d?.ratings?.[yMetric]] as [number,number])
       .filter(([x,y])=> Number.isFinite(x) && Number.isFinite(y))
   },[beanDrips, yMetric])
-
-  const rTempBean = React.useMemo(()=> {
+  const rTempBean = useMemo(()=> {
     const v = corr(beanPairsTemp); return (v==null? null : Math.round(v*100)/100)
   },[beanPairsTemp])
-
-  const rTimeBean = React.useMemo(()=> {
+  const rTimeBean = useMemo(()=> {
     const v = corr(beanPairsTime); return (v==null? null : Math.round(v*100)/100)
   },[beanPairsTime])
-
 
   return (
     <form onSubmit={submit} className="space-y-4">
@@ -224,31 +227,35 @@ export function DripForm({API, beans, onSaved}:{API:string; beans:any[]; onSaved
           ))}
         </select>
         <input className="border rounded p-2" type="date" value={form.brew_date||''} onChange={e=>handle('brew_date',e.target.value)} required />
-          </div>   {/* ← 227行目あたりの grid の閉じタグ */}
+      </div>
 
-    {/* エイジング日数（焙煎日→ドリップ日） */}
-    <div className="text-xs text-gray-700">
-      エイジング日数：
-      {(() => {
-        const roastDate = selBean?.roast_date as string | undefined
-        const brewDate = form.brew_date as string | undefined
-        const d = daysBetween(roastDate, brewDate)
-        if (!form.bean_id || !brewDate) return '--'
-        if (!roastDate) return '—（焙煎日未登録）'
-        return `${d} 日`
-      })()}
-    </div>
+      {/* エイジング日数 */}
+      <div className="text-xs text-gray-700">
+        エイジング日数：
+        {(() => {
+          const roastDate =
+            (selBean?.roast_date as string | undefined) ||
+            (selBean?.roasted_on as string | undefined) ||
+            (selBean?.purchase_date as string | undefined) ||
+            (selBean?.purchased_on as string | undefined)
+          const brewDate = form.brew_date as string | undefined
+          const d = daysBetween(roastDate, brewDate)
+          if (!form.bean_id || !brewDate) return '--'
+          if (!roastDate) return '—（焙煎日未登録）'
+          return `${d} 日`
+        })()}
+      </div>
 
-    {/* セレクト直下：豆セオリーなど */}
-    <div className="bg-gray-50 border rounded p-2 space-y-2 text-sm">
+      {/* セレクト直下：豆セオリー＋豆ごと統計 */}
       <div className="bg-gray-50 border rounded p-2 space-y-2 text-sm">
         <div className="font-semibold">選択豆：{selBean?.name ?? '--'}</div>
         <div>産地セオリー：{ showOrDash(!!form.bean_id, theoryWithValue(derive?.theory?.origin, selBean?.origin)) }</div>
         <div>精製セオリー：{ showOrDash(!!form.bean_id, theoryWithValue(derive?.theory?.process, selBean?.process)) }</div>
         <div>追加処理セオリー：{ showOrDash(!!form.bean_id, theoryWithValue(derive?.theory?.addl_process, selBean?.addl_process)) }</div>
+
         <div className="text-sm">平均評価（★）：<StarRow avg={beanStats?.avg_overall} /></div>
 
-        {/* レーダー（6項目平均） */}
+        {/* レーダー */}
         <div className="h-48">
           <ResponsiveContainer>
             <RadarChart data={radarData}>
@@ -261,7 +268,7 @@ export function DripForm({API, beans, onSaved}:{API:string; beans:any[]; onSaved
           </ResponsiveContainer>
         </div>
 
-        {/* 豆ごと統計（棒） */}
+        {/* 豆ごとバー（抽出方法別平均） */}
         <div className="text-xs">記録数：{beanStats?.count ?? (form.bean_id ? '—' : '--')}　
           平均：{beanStats?.avg_overall ?? (form.bean_id ? '—' : '--')}　
           最高：{beanStats?.max_overall ?? (form.bean_id ? '—' : '--')}
@@ -279,7 +286,7 @@ export function DripForm({API, beans, onSaved}:{API:string; beans:any[]; onSaved
           </ResponsiveContainer>
         </div>
 
-        {/* ここから豆ごと相関：焙煎度基準の湯温差 / 粒度基準の時間差 */}
+        {/* 豆ごと相関：湯温差 / 時間差 */}
         <div className="flex items-center gap-2 text-xs">
           <span>評価指標：</span>
           <select className="border rounded p-1" value={yMetric} onChange={e=>setYMetric(e.target.value as any)}>
@@ -290,13 +297,12 @@ export function DripForm({API, beans, onSaved}:{API:string; beans:any[]; onSaved
           </select>
         </div>
 
-        {/* 湯温差 vs 評価 */}
+        {/* 湯温差 vs 指標 */}
         <div>
           <div className="font-semibold mb-1">
-  湯温差（実測−推奨） vs {yAccessor.label}
-  <span className="ml-2 text-xs text-gray-500">r={rTempBean ?? '—'}</span>
-</div>
-
+            湯温差（実測−推奨） vs {yAccessor.label}
+            <span className="ml-2 text-xs text-gray-500">r={rTempBean ?? '—'}</span>
+          </div>
           <div className="h-44">
             <ResponsiveContainer>
               <ScatterChart>
@@ -310,13 +316,12 @@ export function DripForm({API, beans, onSaved}:{API:string; beans:any[]; onSaved
           </div>
         </div>
 
-        {/* 時間差 vs 評価 */}
+        {/* 時間差 vs 指標 */}
         <div>
-         <div className="font-semibold mb-1">
-  時間差（実測秒−推奨秒） vs {yAccessor.label}
-  <span className="ml-2 text-xs text-gray-500">r={rTimeBean ?? '—'}</span>
-</div>
-
+          <div className="font-semibold mb-1">
+            時間差（実測秒−推奨秒） vs {yAccessor.label}
+            <span className="ml-2 text-xs text-gray-500">r={rTimeBean ?? '—'}</span>
+          </div>
           <div className="h-44">
             <ResponsiveContainer>
               <ScatterChart>
@@ -331,7 +336,7 @@ export function DripForm({API, beans, onSaved}:{API:string; beans:any[]; onSaved
         </div>
       </div>
 
-      {/* 入力群：推奨は各入力直下に表示（既存のまま） */}
+      {/* 入力群：各入力直下に推奨/差分 */}
       <div className="grid grid-cols-3 gap-2">
         <div>
           <input className="border rounded p-2 w-full" placeholder="挽き目 (1~17)" value={form.grind||''} onChange={e=>handle('grind',e.target.value)} />
@@ -346,12 +351,14 @@ export function DripForm({API, beans, onSaved}:{API:string; beans:any[]; onSaved
             ) : '--' }
           </div>
         </div>
+
         <div>
           <input className="border rounded p-2 w-full" placeholder="湯温 (℃)" value={form.water_temp_c||''} onChange={e=>handle('water_temp_c',e.target.value)} />
           <div className="text-xs text-gray-600 mt-1">
             推奨湯温：{showOrDash(!!form.bean_id, derive?.temp?.recommended_c)}℃（Δ { (form.bean_id && form.water_temp_c) ? (derive?.temp?.delta_from_input ?? '—') : '--' }）
           </div>
         </div>
+
         <div>
           <select className="border rounded p-2 w-full" value={form.dripper||''} onChange={e=>handle('dripper',e.target.value)}>
             <option value="">ドリッパー</option>
