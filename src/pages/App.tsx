@@ -43,21 +43,23 @@ export default function App(){
         <div className="p-4 bg-white rounded-2xl shadow">
           <h2 className="font-semibold mb-2">1) コーヒー豆</h2>
           <BeanForm API={API} onSaved={()=>{fetchBeans()}} />
-          <div className="mt-4">
-            <label className="text-sm">在庫豆を選択 → コーチング</label>
-            <select className="w-full border rounded p-2" value={selectedBeanId ?? ''} onChange={e=>{
-              const v = e.target.value ? parseInt(e.target.value) : null
-              setSelectedBeanId(v); if(v) fetchStats('bean', v)
-            }}>
-              <option value="">選択しない</option>
-              {beans.filter(b=>b.in_stock).map(b => <option key={b.id} value={b.id}>{b.name}（{b.origin ?? '産地不明'} / {b.roast_level}）</option>)}
-            </select>
-            {selectedBean && (
-              <div className="text-sm mt-3 space-y-1">
-                <p>産地セオリー：{selectedBean.theory?.origin ?? '—'}</p>
-                <p>精製セオリー：{selectedBean.theory?.process ?? '—'}</p>
-                <p>追加処理：{selectedBean.theory?.addl_process ?? '—'}</p>
-              </div>
+          <section className="grid lg:grid-cols-2 gap-6">
+  {/* ← 左カラム：豆フォームだけ残す */}
+  <div className="p-4 bg-white rounded-2xl shadow">
+    <h2 className="font-semibold mb-2">1) コーヒー豆</h2>
+    <BeanForm API={API} onSaved={()=>{fetchBeans()}} />
+  </div>
+
+  {/* ← 右カラム：ドリップ記録（ここにコーチング等を集約表示していく） */}
+  <div className="p-4 bg-white rounded-2xl shadow">
+    <h2 className="font-semibold mb-2">2) ドリップ記録</h2>
+    <DripForm API={API} beans={beans} onSaved={()=>{fetchDrips(); fetchStats('global')}} />
+    <div className="mt-4 text-sm text-gray-600">
+      <p>記録数：{drips.length}</p>
+    </div>
+  </div>
+</section>
+
             )}
           </div>
         </div>
