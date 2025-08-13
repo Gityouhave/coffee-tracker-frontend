@@ -410,6 +410,81 @@ export function DripForm({API, beans, onSaved}:{API:string; beans:any[]; onSaved
         </div>
       ) : null}
 
+            {/* ---- 単一ドリップ可視化：入力中プレビュー（保存前に確認） ---- */}
+      <div className="bg-white border rounded p-3 space-y-2">
+        <div className="font-semibold text-sm">プレビュー（今回の抽出）</div>
+
+        {/* 星（overall があればそれ、なければ入力済み評価の平均で暫定） */}
+        <div className="text-sm">
+          {(() => {
+            const r = form.ratings || {}
+            const nums = Object.entries(r)
+              .map(([k,v]: any)=> (v!=='' && v!=null ? Number(v) : null))
+              .filter((x:any)=> Number.isFinite(x)) as number[]
+            const overall = Number(r.overall)
+            const base = Number.isFinite(overall) ? overall :
+                         (nums.length ? Math.round((nums.reduce((a,b)=>a+b,0)/nums.length)*10)/10 : null)
+            return <>総合（★）：{
+              base==null ? '--' :
+              (<span aria-label={`rating ${Math.round(base/2)} of 5`}>
+                {'★★★★★'.slice(0,Math.round(base/2))}{'☆☆☆☆☆'.slice(0,5-Math.round(base/2))}
+                <span className="text-[11px] text-gray-500">（{base}）</span>
+              </span>)
+            }</>
+          })()}
+        </div>
+
+        {/* レーダー（入力中の値だけ反映） */}
+        <div className="h-44">
+          <ResponsiveContainer>
+            <RadarChart data={[
+              {subject:'クリーンさ', value: Number(form.ratings?.clean)||0},
+              {subject:'風味',     value: Number(form.ratings?.flavor)||0},
+              {subject:'酸味',     value: Number(form.ratings?.acidity)||0},
+              {subject:'苦味',     value: Number(form.ratings?.bitterness)||0},
+              {subject:'甘味',     value: Number(form.ratings?.sweetness)||0},
+              {subject:'コク',     value: Number(form.ratings?.body)||0},
+              {subject:'後味',     value: Number(form.ratings?.aftertaste)||0},
+            ]}>
+              <PolarGrid />
+              <PolarAngleAxis dataKey="subject" />
+              <PolarRadiusAxis angle={30} domain={[0,10]} />
+              <Radar name="now" dataKey="value" stroke="" fill="" fillOpacity={0.3} />
+              <Tooltip />
+            </RadarChart>
+          </ResponsiveContainer>
+        </div>
+
+        {/* 推奨とのΔ（いま入力している値ベース） */}
+        <div className="grid sm:grid-cols-3 gap-2 text-xs">
+          <div className="border rounded p-2">
+            <div className="font-medium">湯温</div>
+            <div>推奨：{showOrDash(!!form.bean_id, derive?.temp?.recommended_c)}℃</div>
+            <div>Δ：{(form.bean_id && form.water_temp_c) ? (derive?.temp?.delta_from_input ?? '—') : '--'}</div>
+          </div>
+          <div className="border rounded p-2">
+            <div className="font-medium">レシオ/湯量</div>
+            <div>推奨比：{showOrDash(!!form.bean_id, derive?.ratio?.recommended_ratio)}倍</div>
+            <div>推奨湯量：{(form.bean_id && form.dose_g) ? (derive?.ratio?.recommended_water_g ?? '—') : '--'}g</div>
+            <div>Δ：{(form.bean_id && form.dose_g && form.water_g) ? (derive?.ratio?.delta_from_input ?? '—') : '--'}</div>
+          </div>
+          <div className="border rounded p-2">
+            <div className="font-medium">時間</div>
+            <div>推奨：{showOrDash(!!form.bean_id, derive?.time?.recommended_sec)}秒</div>
+            {form.time ? (
+              <div>Δ：{(() => {
+                const rec = Number(derive?.time?.recommended_sec)
+                const mmss = String(form.time||'')
+                const m = mmss.split(':'); const sec = (m.length===2 ? (+m[0]*60 + +m[1]) : NaN)
+                return (Number.isFinite(rec) && Number.isFinite(sec)) ? (sec-rec) : '—'
+              })()}</div>
+            ) : <div>Δ：--</div>}
+          </div>
+        </div>
+      </div>
+      {/* ---- /プレビュー ---- */}
+
+
       <button className="px-3 py-2 rounded bg-blue-600 text-white">ドリップを記録</button>
     </form>
   )
