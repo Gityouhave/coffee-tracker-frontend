@@ -101,15 +101,17 @@ export function DripForm({API, beans, onSaved}:{API:string; beans:any[]; onSaved
     )
   }
 
-  const optionLabel = (b:any)=>{
-    const parts = [b.name]
-    if (b.origin) parts.push(b.origin)
-    if (b.variety) parts.push(b.variety)
-    if (b.process) parts.push(b.process)
-    if (b.addl_process) parts.push(b.addl_process)
-    const base = parts.join('・')
-    return b.roast_level ? `${base}（${b.roast_level}）` : base
-  }
+const optionLabel = (b:any)=>{
+  const parts:string[] = []
+  if (b.name) parts.push(b.name)
+  if (b.origin) parts.push(b.origin)
+  if (b.variety) parts.push(b.variety)
+  if (b.process) parts.push(b.process)
+  if (b.addl_process) parts.push(b.addl_process)
+  const base = parts.join('・')
+  return b.roast_level ? `${base}（${b.roast_level}）` : base
+}
+
   const theoryWithValue = (label:string|undefined|null, value:string|undefined|null)=>{
     if(!selBean) return '--'
     if(value && label) return `${value}（${label}）`
