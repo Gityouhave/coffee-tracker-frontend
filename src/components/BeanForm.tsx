@@ -95,10 +95,10 @@ export function BeanForm({API, onSaved}:{API:string; onSaved:()=>void}){
     const url = editingId ? `${API}/api/beans/${editingId}` : `${API}/api/beans`
     const method = editingId ? 'PUT' : 'POST'
     const r = await fetch(url, { method, headers:{'Content-Type':'application/json'}, body: JSON.stringify(payload) })
-    if(!r.ok){ alert('保存に失敗しました'); return }
-    await loadBeans()
-    onSaved()
-    clearForm()
+if(!r.ok){
+  const txt = await r.text().catch(()=> '')
+  alert(`保存に失敗: HTTP ${r.status}\n${txt}`)
+  return
   }
 
   // --- UI ---
