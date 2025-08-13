@@ -16,9 +16,10 @@ export function DripForm({API, beans, onSaved}:{API:string; beans:any[]; onSaved
     if(form.dose_g) params.set('dose_g', form.dose_g)
     if(form.water_g) params.set('water_g', form.water_g)
     if(form.water_temp_c) params.set('water_temp_c', form.water_temp_c)
+    if(form.dripper) params.set('dripper', form.dripper)
     fetch(`${API}/api/derive?`+params.toString())
       .then(r=>r.json()).then(setDerive)
-  },[form.bean_id, form.grind, form.dose_g, form.water_g, form.water_temp_c])
+  },[form.bean_id, form.grind, form.dose_g, form.water_g, form.water_temp_c,form.dripper])
 
   const submit = async (e:any)=>{
     e.preventDefault()
@@ -89,6 +90,8 @@ export function DripForm({API, beans, onSaved}:{API:string; beans:any[]; onSaved
 
       {derive && (
         <div className="text-sm bg-gray-50 border rounded p-2 space-y-1">
+          <div>ドリッパー理論：{derive.theory?.dripper ?? '-'}</div>
+          <div>挽き目20段階表記：<b>{derive.grind?.label20 ?? '-'}</b></div>
           <div>挽き目表記：<b>{derive.grind?.label ?? '-'}</b></div>
           <div>推奨湯温：{derive.temp?.recommended_c ?? '-'}℃（Δ {derive.temp?.delta_from_input ?? '—'}）</div>
           <div>推奨レシオ：{derive.ratio?.recommended_ratio ?? '-'}倍 → 推奨湯量 {derive.ratio?.recommended_water_g ?? '-'}g（Δ {derive.ratio?.delta_from_input ?? '—'}）</div>
