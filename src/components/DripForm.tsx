@@ -71,6 +71,7 @@ export function DripForm({API, beans, onSaved}:{API:string; beans:any[]; onSaved
   const [beanDrips, setBeanDrips] = useState<any[]>([])
   const [radarData, setRadarData] = useState<any[]>([])
   const [yMetric, setYMetric] = useState<'overall'|'clean'|'flavor'|'body'>('overall')
+  const [editingDripId, setEditingDripId] = useState<number|null>(null)
 
   const handle = (k:string,v:any)=> setForm((s:any)=> ({...s,[k]:v}))
   const handleRating = (k:string,v:any)=> setForm((s:any)=> ({...s, ratings:{...s.ratings, [k]:v}}))
@@ -139,8 +140,24 @@ export function DripForm({API, beans, onSaved}:{API:string; beans:any[]; onSaved
     })()
   },[form.bean_id, API])
 
-  const submit = async (e:any)=>{
-    e.preventDefault()
+  const validate = ()=>{
+  if(!form.bean_id) return '使用豆'
+  if(!form.brew_date) return 'ドリップ日'
+  if(form.grind==='' || form.grind==null) return '挽き目'
+  if(form.water_temp_c==='' || form.water_temp_c==null) return '湯温(℃)'
+  if(form.dose_g==='' || form.dose_g==null) return '豆(g)'
+  if(form.water_g==='' || form.water_g==null) return '湯量(g)'
+  if(!form.time) return '抽出時間(mm:ss)'
+  if(!form.dripper) return 'ドリッパー'
+  if(!form.storage) return '保存状態'
+  return null
+}
+
+
+const submit = async (e:any)=>{
+  e.preventDefault()
+  const miss = validate()
+  if(miss){ alert(`必須項目が不足：${miss}`); return }
     const payload = {
       bean_id: parseInt(form.bean_id),
       brew_date: form.brew_date,
@@ -163,8 +180,10 @@ export function DripForm({API, beans, onSaved}:{API:string; beans:any[]; onSaved
       aftertaste: form.ratings?.aftertaste? parseInt(form.ratings.aftertaste): null,
       overall: form.ratings?.overall? parseInt(form.ratings.overall): null,
     }
-    const r = await fetch(`${API}/api/drips`, {method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(payload)})
-    if(r.ok){ setForm({ratings:{}}); onSaved() }
+    const url = editingDripId ? `${API}/api/drips/${editingDripId}` : `${API}/api/drips`
+  const method = editingDripId ? 'PUT' : 'POST'
+  const r = await fetch(url, {method, headers:{'Content-Type':'application/json'}, body: JSON.stringify(payload)})
+  if(r.ok){ setForm({ratings:{}}); setEditingDripId(null); onSaved() }
   }
 
   // 表示ヘルパ
@@ -373,6 +392,17 @@ export function DripForm({API, beans, onSaved}:{API:string; beans:any[]; onSaved
           <input className="border rounded p-2 w-full" placeholder="豆 (g)" value={form.dose_g||''} onChange={e=>handle('dose_g',e.target.value)} />
           <div className="text-xs text-gray-600 mt-1">推奨レシオ：{showOrDash(!!form.bean_id, derive?.ratio?.recommended_ratio)}倍</div>
           <div className="text-[11px] text-gray-500">最大推奨量：{showOrDash(!!form.bean_id, derive?.dose?.max_recommended_g)}</div>
+          <div className="text-[11px] text-gray-600 mt-1">
+  {(() => {
+    const b = beans.find(b => String(b.id) === String(form.bean_id));
+    const price = Number(b?.price_yen), weight = Number(b?.weight_g), dose = Number(form.dose_g);
+    if (!b || !Number.isFinite(price) || !Number.isFinite(weight) || !Number.isFinite(dose) || weight <= 0) return '費用：--';
+    const perG = Math.round((price / weight) * 100) / 100;
+    const cost = Math.round(perG * dose * 100) / 100;
+    return `費用：約 ${cost} 円（${perG} 円/g）`;
+  })()}
+</div>
+
         </div>
         <div>
           <input className="border rounded p-2 w-full" placeholder="湯量 (g)" value={form.water_g||''} onChange={e=>handle('water_g',e.target.value)} />
@@ -404,11 +434,24 @@ export function DripForm({API, beans, onSaved}:{API:string; beans:any[]; onSaved
         ))}
       </div>
 
-      {(derive?.price && form.dose_g) ? (
-        <div className="text-sm bg-gray-50 border rounded p-2">
-          費用見積：{derive.price.estimated_cost_yen} 円（単価 {derive.price.price_per_g} 円/g）
-        </div>
-      ) : null}
+   {/* 価格見積（豆の単価 × 使用量） */}
+{(() => {
+  const b = beans.find(b => String(b.id) === String(form.bean_id));
+  const price = Number(b?.price_yen);
+  const weight = Number(b?.weight_g);
+  const dose = Number(form.dose_g);
+  if (!b || !Number.isFinite(price) || !Number.isFinite(weight) || !Number.isFinite(dose) || weight <= 0) {
+    return null; // 必要な情報が無ければ非表示
+  }
+  const perG = Math.round((price / weight) * 100) / 100;       // 単価（円/g, 小数2桁）
+  const cost = Math.round(perG * dose * 100) / 100;            // 費用（円, 小数2桁）
+  return (
+    <div className="text-sm bg-gray-50 border rounded p-2">
+      費用見積：{cost} 円（単価 {perG} 円/g）
+    </div>
+  );
+})()}
+
 
             {/* ---- 単一ドリップ可視化：入力中プレビュー（保存前に確認） ---- */}
       <div className="bg-white border rounded p-3 space-y-2">
