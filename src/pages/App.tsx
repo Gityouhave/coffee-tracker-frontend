@@ -1,7 +1,7 @@
-import React, { useEffect, useMemo, useState } from 'react'
+import React, { useEffect, useState } from 'react'
 import { BeanForm } from '../components/BeanForm'
 import { DripForm } from '../components/DripForm'
-import { RadarChart, PolarGrid, PolarAngleAxis, PolarRadiusAxis, Radar, ResponsiveContainer, ScatterChart, Scatter, XAxis, YAxis, CartesianGrid, Tooltip, BarChart, Bar, Legend } from 'recharts'
+import { ResponsiveContainer, ScatterChart, Scatter, XAxis, YAxis, CartesianGrid, Tooltip, BarChart, Bar, Legend } from 'recharts'
 
 const API = import.meta.env.VITE_BACKEND_URL || 'https://<your-username>.pythonanywhere.com'
 
@@ -11,7 +11,6 @@ type Drip = any
 export default function App(){
   const [beans, setBeans] = useState<Bean[]>([])
   const [drips, setDrips] = useState<Drip[]>([])
-  const [selectedBeanId, setSelectedBeanId] = useState<number | null>(null)
   const [stats, setStats] = useState<any>(null)
 
   const fetchBeans = async () => {
@@ -22,15 +21,12 @@ export default function App(){
     const r = await fetch(`${API}/api/drips`)
     setDrips(await r.json())
   }
-  const fetchStats = async (scope: 'global'|'bean', beanId?: number) => {
-    const q = scope==='bean' && beanId ? `?scope=bean&bean_id=${beanId}` : ''
-    const r = await fetch(`${API}/api/stats${q}`)
+  const fetchStats = async () => {
+    const r = await fetch(`${API}/api/stats`)
     setStats(await r.json())
   }
 
-  useEffect(()=>{ fetchBeans(); fetchDrips(); fetchStats('global'); }, [])
-
-  const selectedBean = useMemo(()=> beans.find(b=>b.id===selectedBeanId), [beans, selectedBeanId])
+  useEffect(()=>{ fetchBeans(); fetchDrips(); fetchStats(); }, [])
 
   return (
     <div className="mx-auto max-w-5xl p-4 space-y-8">
@@ -39,43 +35,30 @@ export default function App(){
         <span className="text-sm text-gray-500">Backend: <code>{API}</code></span>
       </header>
 
+      {/* 上段：左=豆フォーム、右=ドリップ記録（ここにコーチングを集約） */}
       <section className="grid lg:grid-cols-2 gap-6">
         <div className="p-4 bg-white rounded-2xl shadow">
           <h2 className="font-semibold mb-2">1) コーヒー豆</h2>
           <BeanForm API={API} onSaved={()=>{fetchBeans()}} />
-          <section className="grid lg:grid-cols-2 gap-6">
-  {/* ← 左カラム：豆フォームだけ残す */}
-  <div className="p-4 bg-white rounded-2xl shadow">
-    <h2 className="font-semibold mb-2">1) コーヒー豆</h2>
-    <BeanForm API={API} onSaved={()=>{fetchBeans()}} />
-  </div>
-
-  {/* ← 右カラム：ドリップ記録（ここにコーチング等を集約表示していく） */}
-  <div className="p-4 bg-white rounded-2xl shadow">
-    <h2 className="font-semibold mb-2">2) ドリップ記録</h2>
-    <DripForm API={API} beans={beans} onSaved={()=>{fetchDrips(); fetchStats('global')}} />
-    <div className="mt-4 text-sm text-gray-600">
-      <p>記録数：{drips.length}</p>
-    </div>
-  </div>
-</section>
-
-            )}
-          </div>
         </div>
 
         <div className="p-4 bg-white rounded-2xl shadow">
           <h2 className="font-semibold mb-2">2) ドリップ記録</h2>
-          <DripForm API={API} beans={beans} onSaved={()=>{fetchDrips(); fetchStats(selectedBeanId? 'bean':'global', selectedBeanId ?? undefined)}} />
+          <DripForm
+            API={API}
+            beans={beans}
+            onSaved={()=>{ fetchDrips(); fetchStats(); }}
+          />
           <div className="mt-4 text-sm text-gray-600">
             <p>記録数：{drips.length}</p>
           </div>
         </div>
       </section>
 
+      {/* 下段：全体統計（棒/散布） */}
       <section className="grid lg:grid-cols-2 gap-6">
         <div className="p-4 bg-white rounded-2xl shadow">
-          <h3 className="font-semibold mb-2">3) 統計（{selectedBean? '豆ごと':'全体'}）</h3>
+          <h3 className="font-semibold mb-2">3) 統計（全体）</h3>
           {stats && <div className="text-sm mb-3">平均評価：{stats.avg_overall ?? '-'}（n={stats.count ?? 0}）</div>}
           <div className="h-64">
             <ResponsiveContainer>
