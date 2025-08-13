@@ -60,6 +60,17 @@ export function DripForm({API, beans, onSaved}:{API:string; beans:any[]; onSaved
   // ---- 表示ヘルパ
   const selBean = beans.find(b=> String(b.id)===String(form.bean_id))
   const showOrDash = (cond:any, val:any, dashWhenBean?:string)=> cond ? (val ?? '—') : (dashWhenBean ?? '--')
+   // 5つ星表示（avg_overall: 0-10 を 0-5 に変換）
+  const StarRow = ({avg}:{avg:number|undefined})=>{
+    if (avg == null || isNaN(Number(avg))) return <span>--</span>
+    const s = Math.round(Number(avg)/2) // 0-5
+    return (
+      <span aria-label={`rating ${s} of 5`}>
+        {'★★★★★'.slice(0,s)}{'☆☆☆☆☆'.slice(0,5-s)} <span className="text-[11px] text-gray-500">({avg})</span>
+      </span>
+    )
+  }
+
   const optionLabel = (b:any)=>{
     const parts = [b.name]
     if (b.origin) parts.push(b.origin)
@@ -96,6 +107,7 @@ export function DripForm({API, beans, onSaved}:{API:string; beans:any[]; onSaved
         <div>精製セオリー：{ showOrDash(!!form.bean_id, theoryWithValue(derive?.theory?.process, selBean?.process)) }</div>
         <div>追加処理：{ showOrDash(!!form.bean_id, theoryWithValue(derive?.theory?.addl_process, selBean?.addl_process)) }</div>
         <div className="text-xs text-gray-500">※選択値＋セオリーを括弧で併記</div>
+                <div className="text-sm">平均評価（★）：<StarRow avg={beanStats?.avg_overall} /></div>
 
         {/* 豆ごと統計（棒グラフ＆サマリ） */}
         <div className="text-xs">記録数：{beanStats?.count ?? (form.bean_id ? '—' : '--')}　
