@@ -89,17 +89,72 @@ export function DripForm({API, beans, onSaved}:{API:string; beans:any[]; onSaved
         ))}
       </div>
 
-      {derive && (
-        <div className="text-sm bg-gray-50 border rounded p-2 space-y-1">
-          <div>ドリッパー理論：{derive.theory?.dripper ?? '-'}</div>
-          <div>挽き目20段階表記：<b>{derive.grind?.label20 ?? '-'}</b></div>
-          <div>推奨湯温：{derive.temp?.recommended_c ?? '-'}℃（Δ {derive.temp?.delta_from_input ?? '—'}）</div>
-          <div>推奨レシオ：{derive.ratio?.recommended_ratio ?? '-'}倍 → 推奨湯量 {derive.ratio?.recommended_water_g ?? '-'}g（Δ {derive.ratio?.delta_from_input ?? '—'}）</div>
-          <div>推奨所要時間：{derive.time?.recommended_sec ?? '-'}秒</div>
-          {derive.price && <div>費用見積：{derive.price.estimated_cost_yen} 円（単価 {derive.price.price_per_g} 円/g）</div>}
-          <div className="text-xs text-gray-500">※焙煎度・入力値から自動導出</div>
+           {(
+        <div className="text-sm bg-gray-50 border rounded p-2 space-y-2">
+          {/* ① 豆コーチング（在庫豆を選んだときだけ） */}
+          <div className="space-y-1">
+            <div className="font-semibold">コーチング</div>
+            <div>選択豆：{beans.find(b=> String(b.id)===String(form.bean_id))?.name ?? '--'}</div>
+            <div>産地セオリー：{derive?.theory?.origin ?? (form.bean_id ? '—' : '--')}</div>
+            <div>精製セオリー：{derive?.theory?.process ?? (form.bean_id ? '—' : '--')}</div>
+            <div>追加処理：{derive?.theory?.addl_process ?? (form.bean_id ? '—' : '--')}</div>
+            <div>ドリッパー理論：{form.dripper ? (derive?.theory?.dripper ?? '—') : '--'}</div>
+          </div>
+
+          {/* ② 挽き目：表記と目安 */}
+          <div className="space-y-1">
+            <div><b>挽き目表記：</b>{
+              (form.bean_id && form.grind) ? (derive?.grind?.label20 ?? '—') : '--'
+            }</div>
+            <div className="text-xs text-gray-600">※焙煎度に応じて自動判定（20段階）</div>
+            <div className="mt-1">
+              <div className="text-xs mb-1">挽き目目安（焙煎度に応じた指標値）</div>
+              <div className="flex flex-wrap gap-2">
+                {(() => {
+                  const m = derive?.grind?.markers_for_roast
+                  const show = !!form.bean_id
+                  const val = (x:any) => (x==null ? '--' : String(x))
+                  return show ? (
+                    <>
+                      <span className="px-2 py-1 border rounded">粗：{val(m?.['粗'])}</span>
+                      <span className="px-2 py-1 border rounded">中粗：{val(m?.['中粗'])}</span>
+                      <span className="px-2 py-1 border rounded">中：{val(m?.['中'])}</span>
+                      <span className="px-2 py-1 border rounded">中細：{val(m?.['中細'])}</span>
+                      <span className="px-2 py-1 border rounded">細：{val(m?.['細'])}</span>
+                      <span className="px-2 py-1 border rounded">極細：{val(m?.['極細'])}</span>
+                    </>
+                  ) : <span className="px-2 py-1 border rounded">--</span>
+                })()}
+              </div>
+            </div>
+          </div>
+
+          {/* ③ 推奨値と差分（未入力は -- 表示） */}
+          <div className="space-y-1">
+            <div>推奨湯温：{
+              (form.bean_id ? (derive?.temp?.recommended_c ?? '—') : '--')
+            }℃（Δ {
+              (form.bean_id && form.water_temp_c) ? (derive?.temp?.delta_from_input ?? '—') : '--'
+            }）</div>
+            <div>推奨レシオ：{
+              (form.bean_id ? (derive?.ratio?.recommended_ratio ?? '—') : '--')
+            }倍 → 推奨湯量 {
+              (form.bean_id && form.dose_g) ? (derive?.ratio?.recommended_water_g ?? '—') : '--'
+            }g（Δ {
+              (form.bean_id && form.dose_g && form.water_g) ? (derive?.ratio?.delta_from_input ?? '—') : '--'
+            }）</div>
+            <div>推奨所要時間：{
+              (form.bean_id ? (derive?.time?.recommended_sec ?? '—') : '--')
+            }秒</div>
+            {derive?.price && form.dose_g ? (
+              <div>費用見積：{derive.price.estimated_cost_yen} 円（単価 {derive.price.price_per_g} 円/g）</div>
+            ) : null}
+          </div>
+
+          <div className="text-xs text-gray-500">※豆選択・入力値に応じて自動導出</div>
         </div>
       )}
+
 
       <button className="px-3 py-2 rounded bg-blue-600 text-white">ドリップを記録</button>
     </form>
