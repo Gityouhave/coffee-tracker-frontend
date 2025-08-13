@@ -1,15 +1,48 @@
-import React, { useEffect, useState } from 'react'
-import { ResponsiveContainer, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, RadarChart, PolarGrid, PolarAngleAxis, PolarRadiusAxis, Radar } from 'recharts'
+import React, { useEffect, useMemo, useState } from 'react'
+import { ResponsiveContainer, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, RadarChart, PolarGrid, PolarAngleAxis, PolarRadiusAxis, Radar, ScatterChart, Scatter } from 'recharts'
+
+/** 焙煎度→推奨湯温（℃）: ライト 92.5 → イタリアン 75（2.5℃刻みの8段） */
+const ROAST_TEMP: Record<string, number> = {
+  'ライト': 92.5, 'シナモン': 90.0, 'ミディアム': 87.5, 'ハイ': 85.0,
+  'シティ': 82.5, 'フルシティ': 80.0, 'フレンチ': 77.5, 'イタリアン': 75.0
+}
+/** 粒度グループ→推奨時間（秒） */
+const GRIND_TIME: Record<string, number> = {
+  '粗': 210, '中粗': 180, '中': 120, '中細': 90, '細': 60, '極細': 40
+}
+/** derive.grind.label20 を 6グループに正規化 */
+const toGrindGroup = (label20?: string|null) => {
+  if (!label20) return null
+  if (label20.startsWith('粗')) return '粗'
+  if (label20.startsWith('中粗')) return '中粗'
+  if (['中++','中+','中','中-','中--'].includes(label20)) return '中'
+  if (label20.startsWith('中細')) return '中細'
+  if (label20.startsWith('細')) return '細'
+  if (label20 === '極細') return '極細'
+  return null
+}
+/** mm:ss → 秒 */
+const toSec = (mmss?: string|null) => {
+  if (!mmss) return null
+  const m = mmss.split(':')
+  if (m.length !== 2) return null
+  const min = Number(m[0]), sec = Number(m[1])
+  if (isNaN(min) || isNaN(sec)) return null
+  return min*60 + sec
+}
 
 export function DripForm({API, beans, onSaved}:{API:string; beans:any[]; onSaved:()=>void}){
   const [form,setForm] = useState<any>({ ratings:{} })
   const [derive, setDerive] = useState<any>(null)
   const [beanStats, setBeanStats] = useState<any>(null)
+  const [beanDrips, setBeanDrips] = useState<any[]>([])
+  const [radarData, setRadarData] = useState<any[]>([])
+  const [yMetric, setYMetric] = useState<'overall'|'clean'|'flavor'|'body'>('overall')
 
   const handle = (k:string,v:any)=> setForm((s:any)=> ({...s,[k]:v}))
   const handleRating = (k:string,v:any)=> setForm((s:any)=> ({...s, ratings:{...s.ratings, [k]:v}}))
 
-  // ---- 導出（セオリー/推奨/挽き目表記）
+  // derive（セオリー/推奨/挽き目表記）
   useEffect(()=>{
     const bean_id = form.bean_id
     if(!bean_id){ setDerive(null); return }
@@ -23,24 +56,21 @@ export function DripForm({API, beans, onSaved}:{API:string; beans:any[]; onSaved
     fetch(`${API}/api/derive?`+params.toString()).then(r=>r.json()).then(setDerive)
   },[form.bean_id, form.grind, form.dose_g, form.water_g, form.water_temp_c, form.dripper, API])
 
-  // ---- 豆ごと統計（豆選択のたび）
+  // 豆ごと統計
   useEffect(()=>{
     if(!form.bean_id){ setBeanStats(null); return }
     fetch(`${API}/api/stats?scope=bean&bean_id=${form.bean_id}`).then(r=>r.json()).then(setBeanStats)
   },[form.bean_id, API])
 
-  const [beanDrips, setBeanDrips] = useState<any[]>([])
-  const [radarData, setRadarData] = useState<any[]>([])
-
-  // ---- 豆ごとのドリップを取得してレーダー用に集計
+  // 豆ごとのドリップ取得→レーダー＆相関用の差分を作る
   useEffect(()=>{
     if(!form.bean_id){ setBeanDrips([]); setRadarData([]); return }
     ;(async ()=>{
       const r = await fetch(`${API}/api/drips`)
       const all = await r.json()
       const mine = all.filter((d:any)=> String(d.bean_id)===String(form.bean_id))
-      setBeanDrips(mine)
 
+      // レーダー用
       const keys = [
         {key:'clean', label:'クリーンさ'},
         {key:'flavor', label:'風味'},
@@ -50,12 +80,31 @@ export function DripForm({API, beans, onSaved}:{API:string; beans:any[]; onSaved
         {key:'body', label:'コク'},
         {key:'aftertaste', label:'後味'},
       ]
-      const data = keys.map(k=>{
+      const rd = keys.map(k=>{
         const vals = mine.map((d:any)=> d.ratings?.[k.key]).filter((x:any)=> typeof x==='number')
-        const avg = vals.length? (vals.reduce((a:number,b:number)=>a+b,0)/vals.length) : null
-        return { subject: k.label, value: avg??0 }
+        const avg = vals.length? (vals.reduce((a:number,b:number)=>a+b,0)/vals.length) : 0
+        return { subject: k.label, value: avg }
       })
-      setRadarData(data)
+      setRadarData(rd)
+
+      // 相関用：焙煎度から推奨湯温、粒度から推奨時間を作って差分を付与
+      const mineWithDeltas = mine.map((d:any)=>{
+        const roast = d.bean?.roast_level ?? d.roast_level ?? 'シティ'
+        const recTemp = ROAST_TEMP[roast] ?? 82.5
+        const tempDelta = (typeof d.water_temp_c === 'number') ? (d.water_temp_c - recTemp) : null
+
+        const label20 = d.derive?.grind?.label20 || d.label20 || null
+        const group = toGrindGroup(label20)
+        const recTime = group ? GRIND_TIME[group] : null
+        const actSec = toSec(d.time)
+        const timeDelta = (actSec!=null && recTime!=null) ? (actSec - recTime) : null
+
+        return {
+          ...d,
+          _deltas: { temp_delta: tempDelta, time_delta: timeDelta }
+        }
+      })
+      setBeanDrips(mineWithDeltas)
     })()
   },[form.bean_id, API])
 
@@ -87,37 +136,36 @@ export function DripForm({API, beans, onSaved}:{API:string; beans:any[]; onSaved
     if(r.ok){ setForm({ratings:{}}); onSaved() }
   }
 
-  // ---- 表示ヘルパ
+  // 表示ヘルパ
   const selBean = beans.find(b=> String(b.id)===String(form.bean_id))
   const showOrDash = (cond:any, val:any, dashWhenBean?:string)=> cond ? (val ?? '—') : (dashWhenBean ?? '--')
-   // 5つ星表示（avg_overall: 0-10 を 0-5 に変換）
   const StarRow = ({avg}:{avg:number|undefined})=>{
     if (avg == null || isNaN(Number(avg))) return <span>--</span>
-    const s = Math.round(Number(avg)/2) // 0-5
-    return (
-      <span aria-label={`rating ${s} of 5`}>
-        {'★★★★★'.slice(0,s)}{'☆☆☆☆☆'.slice(0,5-s)} <span className="text-[11px] text-gray-500">({avg})</span>
-      </span>
-    )
+    const s = Math.round(Number(avg)/2)
+    return (<span aria-label={`rating ${s} of 5`}>{'★★★★★'.slice(0,s)}{'☆☆☆☆☆'.slice(0,5-s)} <span className="text-[11px] text-gray-500">({avg})</span></span>)
   }
-
-const optionLabel = (b:any)=>{
-  const parts:string[] = []
-  if (b.name) parts.push(b.name)
-  if (b.origin) parts.push(b.origin)
-  if (b.variety) parts.push(b.variety)
-  if (b.process) parts.push(b.process)
-  if (b.addl_process) parts.push(b.addl_process)
-  const base = parts.join('・')
-  return b.roast_level ? `${base}（${b.roast_level}）` : base
-}
-
-  const theoryWithValue = (label:string|undefined|null, value:string|undefined|null)=>{
+  const optionLabel = (b:any)=>{
+    const parts:string[] = []
+    if (b.name) parts.push(b.name)
+    if (b.origin) parts.push(b.origin)
+    if (b.variety) parts.push(b.variety)
+    if (b.process) parts.push(b.process)
+    if (b.addl_process) parts.push(b.addl_process)
+    const base = parts.join('・')
+    return b.roast_level ? `${base}（${b.roast_level}）` : base
+  }
+  const theoryWithValue = (theory:string|undefined|null, value:string|undefined|null)=>{
     if(!selBean) return '--'
-    if(value && label) return `${value}（${label}）`
-    if(value && !label) return `${value}（—）`
+    if(value && theory) return `${value}（${theory}）`
+    if(value && !theory) return `${value}（—）`
     return '—'
   }
+
+  // 豆ごと散布図の Y 指標切替（overall/clean/flavor/body）
+  const yAccessor = useMemo(()=>({
+    key: `ratings.${yMetric}`,
+    label: yMetric === 'overall' ? '総合' : (yMetric==='clean'?'クリーンさ':(yMetric==='flavor'?'風味':'コク'))
+  }),[yMetric])
 
   return (
     <form onSubmit={submit} className="space-y-4">
@@ -132,29 +180,28 @@ const optionLabel = (b:any)=>{
         <input className="border rounded p-2" type="date" value={form.brew_date||''} onChange={e=>handle('brew_date',e.target.value)} required />
       </div>
 
-      {/* セレクト直下：豆セオリー + 豆ごと統計（ドリップ前に参照） */}
+      {/* セレクト直下：豆セオリー + （★/レーダー/棒） */}
       <div className="bg-gray-50 border rounded p-2 space-y-2 text-sm">
         <div className="font-semibold">選択豆：{selBean?.name ?? '--'}</div>
-<div>産地セオリー：{ showOrDash(!!form.bean_id, theoryWithValue(derive?.theory?.origin, selBean?.origin)) }</div>
-<div>精製セオリー：{ showOrDash(!!form.bean_id, theoryWithValue(derive?.theory?.process, selBean?.process)) }</div>
-<div>追加処理セオリー：{ showOrDash(!!form.bean_id, theoryWithValue(derive?.theory?.addl_process, selBean?.addl_process)) }</div>
-<div className="text-xs text-gray-500">※「選択値（セオリー）」の形式で表示</div>
-                <div className="text-sm">平均評価（★）：<StarRow avg={beanStats?.avg_overall} /></div>
-        {/* レーダーチャート（6項目平均） */}
-<div className="h-48">
-  <ResponsiveContainer>
-    <RadarChart data={radarData}>
-      <PolarGrid />
-      <PolarAngleAxis dataKey="subject" />
-      <PolarRadiusAxis angle={30} domain={[0, 10]} />
-      <Radar name="avg" dataKey="value" stroke="" fill="" fillOpacity={0.3} />
-      <Tooltip />
-    </RadarChart>
-  </ResponsiveContainer>
-</div>
+        <div>産地セオリー：{ showOrDash(!!form.bean_id, theoryWithValue(derive?.theory?.origin, selBean?.origin)) }</div>
+        <div>精製セオリー：{ showOrDash(!!form.bean_id, theoryWithValue(derive?.theory?.process, selBean?.process)) }</div>
+        <div>追加処理セオリー：{ showOrDash(!!form.bean_id, theoryWithValue(derive?.theory?.addl_process, selBean?.addl_process)) }</div>
+        <div className="text-sm">平均評価（★）：<StarRow avg={beanStats?.avg_overall} /></div>
 
+        {/* レーダー（6項目平均） */}
+        <div className="h-48">
+          <ResponsiveContainer>
+            <RadarChart data={radarData}>
+              <PolarGrid />
+              <PolarAngleAxis dataKey="subject" />
+              <PolarRadiusAxis angle={30} domain={[0, 10]} />
+              <Radar name="avg" dataKey="value" stroke="" fill="" fillOpacity={0.3} />
+              <Tooltip />
+            </RadarChart>
+          </ResponsiveContainer>
+        </div>
 
-        {/* 豆ごと統計（棒グラフ＆サマリ） */}
+        {/* 豆ごと統計（棒） */}
         <div className="text-xs">記録数：{beanStats?.count ?? (form.bean_id ? '—' : '--')}　
           平均：{beanStats?.avg_overall ?? (form.bean_id ? '—' : '--')}　
           最高：{beanStats?.max_overall ?? (form.bean_id ? '—' : '--')}
@@ -171,9 +218,52 @@ const optionLabel = (b:any)=>{
             </BarChart>
           </ResponsiveContainer>
         </div>
+
+        {/* ここから豆ごと相関：焙煎度基準の湯温差 / 粒度基準の時間差 */}
+        <div className="flex items-center gap-2 text-xs">
+          <span>評価指標：</span>
+          <select className="border rounded p-1" value={yMetric} onChange={e=>setYMetric(e.target.value as any)}>
+            <option value="overall">総合</option>
+            <option value="clean">クリーンさ</option>
+            <option value="flavor">風味</option>
+            <option value="body">コク</option>
+          </select>
+        </div>
+
+        {/* 湯温差 vs 評価 */}
+        <div>
+          <div className="font-semibold mb-1">湯温差（実測−推奨） vs {yAccessor.label}</div>
+          <div className="h-44">
+            <ResponsiveContainer>
+              <ScatterChart>
+                <CartesianGrid />
+                <XAxis dataKey="_deltas.temp_delta" name="tempΔ(°C)" />
+                <YAxis dataKey={yAccessor.key} name={yAccessor.label} />
+                <Tooltip />
+                <Scatter name="drips" data={beanDrips} />
+              </ScatterChart>
+            </ResponsiveContainer>
+          </div>
+        </div>
+
+        {/* 時間差 vs 評価 */}
+        <div>
+          <div className="font-semibold mb-1">時間差（実測秒−推奨秒） vs {yAccessor.label}</div>
+          <div className="h-44">
+            <ResponsiveContainer>
+              <ScatterChart>
+                <CartesianGrid />
+                <XAxis dataKey="_deltas.time_delta" name="timeΔ(s)" />
+                <YAxis dataKey={yAccessor.key} name={yAccessor.label} />
+                <Tooltip />
+                <Scatter name="drips" data={beanDrips} />
+              </ScatterChart>
+            </ResponsiveContainer>
+          </div>
+        </div>
       </div>
 
-      {/* 2列目：挽き目/湯温/ドリッパー（各入力の直後に推奨/差分） */}
+      {/* 入力群：推奨は各入力直下に表示（既存のまま） */}
       <div className="grid grid-cols-3 gap-2">
         <div>
           <input className="border rounded p-2 w-full" placeholder="挽き目 (1~17)" value={form.grind||''} onChange={e=>handle('grind',e.target.value)} />
@@ -188,26 +278,21 @@ const optionLabel = (b:any)=>{
             ) : '--' }
           </div>
         </div>
-
         <div>
           <input className="border rounded p-2 w-full" placeholder="湯温 (℃)" value={form.water_temp_c||''} onChange={e=>handle('water_temp_c',e.target.value)} />
           <div className="text-xs text-gray-600 mt-1">
             推奨湯温：{showOrDash(!!form.bean_id, derive?.temp?.recommended_c)}℃（Δ { (form.bean_id && form.water_temp_c) ? (derive?.temp?.delta_from_input ?? '—') : '--' }）
           </div>
         </div>
-
         <div>
           <select className="border rounded p-2 w-full" value={form.dripper||''} onChange={e=>handle('dripper',e.target.value)}>
             <option value="">ドリッパー</option>
             {['水出し','エアロプレス','クレバー','ハリオスイッチ','ハリオ','フラワー','クリスタル','カリタウェーブ','ブルーボトル','コーノ','フィン','ネル','フレンチプレス','エスプレッソ','モカポット','サイフォン'].map(x=> <option key={x}>{x}</option>)}
           </select>
-          <div className="text-xs text-gray-600 mt-1">
-            ドリッパー理論：{ form.dripper ? (derive?.theory?.dripper ?? '—') : '--' }
-          </div>
+          <div className="text-xs text-gray-600 mt-1">ドリッパー理論：{ form.dripper ? (derive?.theory?.dripper ?? '—') : '--' }</div>
         </div>
       </div>
 
-      {/* 3列目：豆/湯量/落ちきり量（レシオ推奨とΔを個別に） */}
       <div className="grid grid-cols-3 gap-2">
         <div>
           <input className="border rounded p-2 w-full" placeholder="豆 (g)" value={form.dose_g||''} onChange={e=>handle('dose_g',e.target.value)} />
@@ -223,7 +308,6 @@ const optionLabel = (b:any)=>{
         <input className="border rounded p-2" placeholder="落ちきり量 (g)" value={form.drawdown_g||''} onChange={e=>handle('drawdown_g',e.target.value)} />
       </div>
 
-      {/* 4列目：時間/保存 */}
       <div className="grid grid-cols-2 gap-2">
         <div>
           <input className="border rounded p-2 w-full" placeholder="抽出時間 (mm:ss)" value={form.time||''} onChange={e=>handle('time',e.target.value)} />
@@ -236,7 +320,6 @@ const optionLabel = (b:any)=>{
         </select>
       </div>
 
-      {/* メモ・評価 */}
       <textarea className="w-full border rounded p-2" placeholder="手法メモ" value={form.method_memo||''} onChange={e=>handle('method_memo',e.target.value)} />
       <textarea className="w-full border rounded p-2" placeholder="感想メモ" value={form.note_memo||''} onChange={e=>handle('note_memo',e.target.value)} />
 
@@ -246,7 +329,6 @@ const optionLabel = (b:any)=>{
         ))}
       </div>
 
-      {/* 価格見積（豆量入力時のみ） */}
       {(derive?.price && form.dose_g) ? (
         <div className="text-sm bg-gray-50 border rounded p-2">
           費用見積：{derive.price.estimated_cost_yen} 円（単価 {derive.price.price_per_g} 円/g）
