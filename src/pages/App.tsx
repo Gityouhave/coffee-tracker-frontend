@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react'
+import React, { useEffect, useMemo, useState } from 'react'
 import { BeanForm } from '../components/BeanForm'
 import { DripForm } from '../components/DripForm'
 import MissingOrigins from '../components/MissingOrigins'
@@ -9,10 +9,45 @@ const API = import.meta.env.VITE_BACKEND_URL || 'https://<your-username>.pythona
 type Bean = any
 type Drip = any
 
+/** 焙煎度→推奨湯温（℃） */
+const ROAST_TEMP: Record<string, number> = {
+  'ライト': 92.5, 'シナモン': 90.0, 'ミディアム': 87.5, 'ハイ': 85.0,
+  'シティ': 82.5, 'フルシティ': 80.0, 'フレンチ': 77.5, 'イタリアン': 75.0
+}
+/** 粒度グループ→推奨時間（秒） */
+const GRIND_TIME: Record<string, number> = {
+  '粗': 210, '中粗': 180, '中': 120, '中細': 90, '細': 60, '極細': 40
+}
+const toSec = (mmss?: string|null) => {
+  if (!mmss) return null
+  const [m,s] = mmss.split(':')
+  const mi = Number(m), se = Number(s)
+  if (isNaN(mi)||isNaN(se)) return null
+  return mi*60 + se
+}
+/** 20段階ラベル→6グループ */
+const toGrindGroup = (label20?: string|null) => {
+  if (!label20) return null
+  if (label20.startsWith('粗')) return '粗'
+  if (label20.startsWith('中粗')) return '中粗'
+  if (['中++','中+','中','中-','中--'].includes(label20)) return '中'
+  if (label20.startsWith('中細')) return '中細'
+  if (label20.startsWith('細')) return '細'
+  if (label20 === '極細') return '極細'
+  return null
+}
+
 export default function App(){
   const [beans, setBeans] = useState<Bean[]>([])
   const [drips, setDrips] = useState<Drip[]>([])
   const [stats, setStats] = useState<any>(null)
+
+  // 全体相関の Y 指標（overall/clean/flavor/body）
+  const [yMetric, setYMetric] = useState<'overall'|'clean'|'flavor'|'body'>('overall')
+  const yKey = useMemo(()=> `ratings.${yMetric}`, [yMetric])
+  const yLabel = useMemo(()=>(
+    yMetric==='overall'?'総合':yMetric==='clean'?'クリーンさ':yMetric==='flavor'?'風味':'コク'
+  ),[yMetric])
 
   const fetchBeans = async () => {
     const r = await fetch(`${API}/api/beans`)
@@ -29,6 +64,24 @@ export default function App(){
 
   useEffect(()=>{ fetchBeans(); fetchDrips(); fetchStats(); }, [])
 
+  // 全体相関用：各ドリップに temp_delta/time_delta を付与
+  const dripsWithDeltas = useMemo(()=>{
+    return drips.map((d:any)=>{
+      const roast = d.bean?.roast_level ?? d.roast_level ?? 'シティ'
+      const recTemp = ROAST_TEMP[roast] ?? 82.5
+      const tempDelta = (typeof d.water_temp_c === 'number') ? (d.water_temp_c - recTemp) : null
+
+      // 20段階挽き目ラベルは保存時に d.derive?.grind?.label20 を持たせている想定。無い場合は null。
+      const label20 = d.derive?.grind?.label20 || d.label20 || null
+      const group = toGrindGroup(label20)
+      const recTime = group ? GRIND_TIME[group] : null
+      const actSec = toSec(d.time)
+      const timeDelta = (actSec!=null && recTime!=null) ? (actSec - recTime) : null
+
+      return { ...d, _deltas: { temp_delta: tempDelta, time_delta: timeDelta } }
+    })
+  }, [drips])
+
   return (
     <div className="mx-auto max-w-5xl p-4 space-y-8">
       <header className="flex items-baseline justify-between">
@@ -36,7 +89,7 @@ export default function App(){
         <span className="text-sm text-gray-500">Backend: <code>{API}</code></span>
       </header>
 
-      {/* 上段：左=豆フォーム、右=ドリップ記録（ここにコーチングを集約） */}
+      {/* 上段：左=豆フォーム（欠落産地つき）、右=ドリップ記録 */}
       <section className="grid lg:grid-cols-2 gap-6">
         <div className="p-4 bg-white rounded-2xl shadow">
           <h2 className="font-semibold mb-2">1) コーヒー豆</h2>
@@ -46,18 +99,14 @@ export default function App(){
 
         <div className="p-4 bg-white rounded-2xl shadow">
           <h2 className="font-semibold mb-2">2) ドリップ記録</h2>
-          <DripForm
-            API={API}
-            beans={beans}
-            onSaved={()=>{ fetchDrips(); fetchStats(); }}
-          />
+          <DripForm API={API} beans={beans} onSaved={()=>{fetchDrips(); fetchStats();}} />
           <div className="mt-4 text-sm text-gray-600">
             <p>記録数：{drips.length}</p>
           </div>
         </div>
       </section>
 
-           {/* 下段：全体統計（棒/散布） */}
+      {/* 下段：全体統計（棒） */}
       <section className="grid lg:grid-cols-2 gap-6">
         <div className="p-4 bg-white rounded-2xl shadow">
           <h3 className="font-semibold mb-2">3) 統計（全体）</h3>
@@ -76,52 +125,48 @@ export default function App(){
           </div>
         </div>
 
-        {/* レシオ差 vs 総合評価 */}
+        {/* レシオ差 vs 総合（既存）←必要なら残す。ここでは相関系を優先するため一旦削除してOK */}
         <div className="p-4 bg-white rounded-2xl shadow">
-          <h3 className="font-semibold mb-2">最近のドリップ（評価 vs レシオ差）</h3>
-          <div className="h-64">
-            <ResponsiveContainer>
-              <ScatterChart>
-                <CartesianGrid />
-                <XAxis dataKey="derived.deltas.ratio_delta" name="ratioΔ" />
-                <YAxis dataKey="ratings.overall" name="overall" />
-                <Tooltip />
-                <Scatter name="drips" data={drips} />
-              </ScatterChart>
-            </ResponsiveContainer>
-          </div>
+          <h3 className="font-semibold mb-2">評価指標</h3>
+          <select className="border rounded p-2 text-sm" value={yMetric} onChange={e=>setYMetric(e.target.value as any)}>
+            <option value="overall">総合</option>
+            <option value="clean">クリーンさ</option>
+            <option value="flavor">風味</option>
+            <option value="body">コク</option>
+          </select>
+          <div className="text-xs text-gray-500 mt-1">※下の散布図のY軸が切り替わります</div>
         </div>
       </section>
 
-      {/* 追加：湯温差 / 時間差 の散布図 */}
+      {/* 追加：湯温差 / 時間差 の散布図（全体） */}
       <section className="grid lg:grid-cols-2 gap-6">
-        {/* 湯温差 vs 総合評価 */}
+        {/* 湯温差 vs 評価（全体） */}
         <div className="p-4 bg-white rounded-2xl shadow">
-          <h3 className="font-semibold mb-2">最近のドリップ（評価 vs 湯温差）</h3>
+          <h3 className="font-semibold mb-2">全体：湯温差（実測−推奨） vs {yLabel}</h3>
           <div className="h-64">
             <ResponsiveContainer>
               <ScatterChart>
                 <CartesianGrid />
-                <XAxis dataKey="derived.deltas.temp_delta" name="tempΔ(°C)" />
-                <YAxis dataKey="ratings.overall" name="overall" />
+                <XAxis dataKey="_deltas.temp_delta" name="tempΔ(°C)" />
+                <YAxis dataKey={yKey} name={yLabel} />
                 <Tooltip />
-                <Scatter name="drips" data={drips} />
+                <Scatter name="drips" data={dripsWithDeltas} />
               </ScatterChart>
             </ResponsiveContainer>
           </div>
         </div>
 
-        {/* 時間差 vs 総合評価 */}
+        {/* 時間差 vs 評価（全体） */}
         <div className="p-4 bg-white rounded-2xl shadow">
-          <h3 className="font-semibold mb-2">最近のドリップ（評価 vs 時間差）</h3>
+          <h3 className="font-semibold mb-2">全体：時間差（実測秒−推奨秒） vs {yLabel}</h3>
           <div className="h-64">
             <ResponsiveContainer>
               <ScatterChart>
                 <CartesianGrid />
-                <XAxis dataKey="derived.deltas.time_delta" name="timeΔ(s)" />
-                <YAxis dataKey="ratings.overall" name="overall" />
+                <XAxis dataKey="_deltas.time_delta" name="timeΔ(s)" />
+                <YAxis dataKey={yKey} name={yLabel} />
                 <Tooltip />
-                <Scatter name="drips" data={drips} />
+                <Scatter name="drips" data={dripsWithDeltas} />
               </ScatterChart>
             </ResponsiveContainer>
           </div>
