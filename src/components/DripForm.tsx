@@ -6,6 +6,15 @@ const ROAST_TEMP: Record<string, number> = {
   'ライト': 92.5, 'シナモン': 90.0, 'ミディアム': 87.5, 'ハイ': 85.0,
   'シティ': 82.5, 'フルシティ': 80.0, 'フレンチ': 77.5, 'イタリアン': 75.0
 }
+  // 日付差（日）を計算（yyyy-mm-dd 文字列想定）
+  const daysBetween = (from?: string|null, to?: string|null) => {
+    if (!from || !to) return null
+    const a = new Date(from + 'T00:00:00')
+    const b = new Date(to + 'T00:00:00')
+    const ms = b.getTime() - a.getTime()
+    return Math.floor(ms / (1000*60*60*24))
+  }
+
 /** 粒度グループ→推奨時間（秒） */
 const GRIND_TIME: Record<string, number> = {
   '粗': 210, '中粗': 180, '中': 120, '中細': 90, '細': 60, '極細': 40
@@ -215,9 +224,23 @@ export function DripForm({API, beans, onSaved}:{API:string; beans:any[]; onSaved
           ))}
         </select>
         <input className="border rounded p-2" type="date" value={form.brew_date||''} onChange={e=>handle('brew_date',e.target.value)} required />
-      </div>
+          </div>   {/* ← 227行目あたりの grid の閉じタグ */}
 
-      {/* セレクト直下：豆セオリー + （★/レーダー/棒） */}
+    {/* エイジング日数（焙煎日→ドリップ日） */}
+    <div className="text-xs text-gray-700">
+      エイジング日数：
+      {(() => {
+        const roastDate = selBean?.roast_date as string | undefined
+        const brewDate = form.brew_date as string | undefined
+        const d = daysBetween(roastDate, brewDate)
+        if (!form.bean_id || !brewDate) return '--'
+        if (!roastDate) return '—（焙煎日未登録）'
+        return `${d} 日`
+      })()}
+    </div>
+
+    {/* セレクト直下：豆セオリーなど */}
+    <div className="bg-gray-50 border rounded p-2 space-y-2 text-sm">
       <div className="bg-gray-50 border rounded p-2 space-y-2 text-sm">
         <div className="font-semibold">選択豆：{selBean?.name ?? '--'}</div>
         <div>産地セオリー：{ showOrDash(!!form.bean_id, theoryWithValue(derive?.theory?.origin, selBean?.origin)) }</div>
