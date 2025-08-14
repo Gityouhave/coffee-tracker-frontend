@@ -24,6 +24,7 @@ export function BeanForm({API, onSaved}:{API:string; onSaved:()=>void}){
   })
   const [beans, setBeans] = useState<Bean[]>([])
   const [editingId, setEditingId] = useState<number|null>(null)
+  const [dangerOpenId, setDangerOpenId] = useState<number|null>(null) // 危険操作の開閉（行ごと）
 
   const handle = (k:string,v:any)=> setForm((s:any)=> ({...s,[k]:v}))
 
@@ -39,7 +40,7 @@ export function BeanForm({API, onSaved}:{API:string; onSaved:()=>void}){
       name: b.name || '',
       roast_level: b.roast_level || 'シティ',
       in_stock: !!b.in_stock,
-      // 既存は文字列保管の想定 → 配列化
+      // 既存は文字列保存を想定 → 配列化
       origins: (b.origin ? String(b.origin).split(',').map((s:string)=>s.trim()).filter(Boolean) : []),
       process: b.process || '不明',
       addl_process: b.addl_process || '',
@@ -95,10 +96,47 @@ export function BeanForm({API, onSaved}:{API:string; onSaved:()=>void}){
     const url = editingId ? `${API}/api/beans/${editingId}` : `${API}/api/beans`
     const method = editingId ? 'PUT' : 'POST'
     const r = await fetch(url, { method, headers:{'Content-Type':'application/json'}, body: JSON.stringify(payload) })
-if(!r.ok){
-  const txt = await r.text().catch(()=> '')
-  alert(`保存に失敗: HTTP ${r.status}\n${txt}`)
-  return
+    if(!r.ok){
+      const txt = await r.text().catch(()=> '')
+      alert(`保存に失敗: HTTP ${r.status}\n${txt}`)
+      return
+    }
+    await loadBeans()
+    onSaved()
+    clearForm()
+  }
+
+  // --- 削除系 ---
+  const deleteBean = async (id:number, name:string)=>{
+    if (!confirm(`「${name}」を削除しますか？\n（関連ドリップがある場合は削除不可です）`)) return
+    const r = await fetch(`${API}/api/beans/${id}`, { method:'DELETE' })
+    if (r.ok){
+      await loadBeans(); onSaved(); return
+    }
+    const body = await r.text().catch(()=> '')
+    // 紐づきあり等で弾かれた場合は危険操作を案内
+    alert(`通常削除に失敗しました。\n${body || ''}\n必要なら行の「危険操作 ▶︎」を開いて全削除をご利用ください。`)
+    setDangerOpenId(id)
+  }
+
+  // 危険：豆＋関連ドリップも全削除（force=1）
+  const forceDeleteBean = async (id:number, name:string)=>{
+    // 1段階目確認
+    if (!confirm(`⚠️ 本当に「${name}」と関連ドリップを全て削除します。元に戻せません。進めますか？`)) return
+    // 2段階目：名前入力での確認
+    const typed = prompt(`確認のため、豆の名前を正確に入力してください：\n${name}`)
+    if (typed !== name){
+      alert('名前が一致しません。中止しました。'); return
+    }
+    // 実行（バックエンドは DELETE /api/beans/:id?force=1 を実装しておく）
+    const r = await fetch(`${API}/api/beans/${id}?force=1`, { method:'DELETE' })
+    if (!r.ok){
+      const txt = await r.text().catch(()=> '')
+      alert(`全削除に失敗: HTTP ${r.status}\n${txt}`)
+      return
+    }
+    await loadBeans(); onSaved()
+    alert('削除しました。')
   }
 
   // --- UI ---
@@ -173,17 +211,47 @@ if(!r.ok){
         </div>
       </form>
 
-      {/* 一覧（簡易）→ 編集 */}
+      {/* 一覧（編集/削除/危険操作） */}
       {beans.length>0 && (
         <div className="text-sm">
           <div className="font-semibold mb-1">登録済みの豆</div>
-          <ul className="space-y-1">
+          <ul className="space-y-2">
             {beans.map(b=>(
-              <li key={b.id} className="flex items-center justify-between border rounded p-2">
-                <span className="truncate">{b.name} / {b.origin} / {b.roast_level} / 在庫:{b.in_stock?'あり':'なし'}</span>
-                <div className="flex gap-2">
-                  <button className="px-2 py-1 border rounded" onClick={()=>startEdit(b)}>編集</button>
+              <li key={b.id} className="border rounded p-2">
+                <div className="flex items-center justify-between gap-2">
+                  <span className="truncate">{b.name} / {b.origin} / {b.roast_level} / 在庫:{b.in_stock?'あり':'なし'}</span>
+                  <div className="flex gap-2">
+                    <button className="px-2 py-1 border rounded" onClick={()=>startEdit(b)}>編集</button>
+                    <button className="px-2 py-1 border rounded text-red-600" onClick={()=>deleteBean(b.id, b.name)}>削除</button>
+                    <button
+                      className="px-2 py-1 border rounded text-xs"
+                      onClick={()=> setDangerOpenId(d=> d===b.id ? null : b.id)}
+                      title="危険操作（豆＋関連ドリップの全削除）"
+                    >
+                      {dangerOpenId===b.id ? '危険操作 ▲' : '危険操作 ▶︎'}
+                    </button>
+                  </div>
                 </div>
+
+                {dangerOpenId===b.id && (
+                  <div className="mt-2 p-2 rounded border border-red-300 bg-red-50 text-red-800">
+                    <div className="font-semibold text-[13px]">⚠️ この豆に紐づく全ドリップも同時に削除します（取り消し不可）</div>
+                    <div className="mt-1 flex flex-wrap gap-2">
+                      <button
+                        className="px-3 py-1 rounded bg-red-600 text-white"
+                        onClick={()=>forceDeleteBean(b.id, b.name)}
+                      >
+                        完全に削除（豆＋ドリップ）
+                      </button>
+                      <button
+                        className="px-3 py-1 rounded bg-white border"
+                        onClick={()=>setDangerOpenId(null)}
+                      >
+                        やめる
+                      </button>
+                    </div>
+                  </div>
+                )}
               </li>
             ))}
           </ul>
