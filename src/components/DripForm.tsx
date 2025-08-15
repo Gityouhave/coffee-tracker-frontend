@@ -304,7 +304,7 @@ const [dripDate, setDripDate] = useState<string>(
 
   const validate = ()=>{
     if(!form.bean_id) return '使用豆'
-    if(!form.brew_date) return 'ドリップ日'
+    
     if(form.grind==='' || form.grind==null) return '挽き目'
     if(form.water_temp_c==='' || form.water_temp_c==null) return '湯温(℃)'
     if(form.dose_g==='' || form.dose_g==null) return '豆(g)'
@@ -458,7 +458,15 @@ if (!form.brew_date) {
             <option key={b.id} value={b.id}>{beanOptionLabel(b)}</option>
           ))}
         </select>
-        <input   className="border rounded p-2"   type="date"   value={form.brew_date || dripDate}   onChange={e=>{     setDripDate(e.target.value)     handle('brew_date', e.target.value)   }} />
+        <input
+  className="border rounded p-2"
+  type="date"
+  value={form.brew_date || dripDate}
+  onChange={(e) => {
+    setDripDate(e.target.value);
+    handle('brew_date', e.target.value);
+  }}
+/>
       </div>
 
       {(last || bestPatterns.length>0) && (
