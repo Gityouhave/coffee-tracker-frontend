@@ -382,11 +382,10 @@ if (!form.brew_date) {
     const method = editingDripId ? 'PUT' : 'POST'
     const r = await fetch(url, {method, headers:{'Content-Type':'application/json'}, body: JSON.stringify(payload)})
     if (r.ok) {
-  setForm({ratings:{}});
-  setEditingDripId(null);
-  // 送信完了時だけ ratings とドラフトをクリア
+  setForm({ ratings: {} });
   setRatings({});
   saveDraftRatings({});
+  setEditingDripId(null);
   onSaved();
 }
   }
@@ -436,10 +435,10 @@ const RATING_OPTIONS5: { value: string; label: string }[] = [
 const RatingSelect = ({
   k, label,
 }: {
-  k: keyof typeof ratings;
+  k: 'overall'|'clean'|'flavor'|'acidity'|'bitterness'|'sweetness'|'body'|'aftertaste';
   label: string;
 }) => {
-  const val = ratings[k] ?? '';   // ← form ではなく ratings を参照
+  const val = ratings[k] ?? '';
   return (
     <div className="flex flex-col gap-1">
       <label className="text-xs text-gray-600">{label}</label>
@@ -837,14 +836,14 @@ const RatingSelect = ({
         <div className="h-44">
           <ResponsiveContainer>
   <RadarChart data={[
-    {subject:'クリーンさ', value: Number(ratings.clean)      || 0},
-    {subject:'風味',       value: Number(ratings.flavor)     || 0},
-    {subject:'酸味',       value: Number(ratings.acidity)    || 0},
-    {subject:'苦味',       value: Number(ratings.bitterness) || 0},
-    {subject:'甘味',       value: Number(ratings.sweetness)  || 0},
-    {subject:'コク',       value: Number(ratings.body)       || 0},
-    {subject:'後味',       value: Number(ratings.aftertaste) || 0},
-  ]}>
+  {subject:'クリーンさ', value: Number(ratings.clean)      || 0},
+  {subject:'風味',       value: Number(ratings.flavor)     || 0},
+  {subject:'酸味',       value: Number(ratings.acidity)    || 0},
+  {subject:'苦味',       value: Number(ratings.bitterness) || 0},
+  {subject:'甘味',       value: Number(ratings.sweetness)  || 0},
+  {subject:'コク',       value: Number(ratings.body)       || 0},
+  {subject:'後味',       value: Number(ratings.aftertaste) || 0},
+]}>
     <PolarGrid />
     <PolarAngleAxis dataKey="subject" />
     <PolarRadiusAxis angle={30} domain={[0,10]} />
