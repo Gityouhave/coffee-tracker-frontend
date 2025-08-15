@@ -157,7 +157,13 @@ const [dripDate, setDripDate] = useState<string>(
   }
 
   const handle = (k:string,v:any)=> setForm((s:any)=> ({...s,[k]:v}))
-  const handleRating = (k:string,v:any)=> setForm((s:any)=> ({...s, ratings:{...s.ratings, [k]:v}}))
+  // 置き換え（関数の上の方）
+const handleRating = React.useCallback((k: string, v: any) => {
+  setForm((s: any) => ({
+    ...s,
+    ratings: { ...s.ratings, [k]: String(v ?? '') }, // ← 必ず文字列
+  }));
+}, []);
 
   // 統一フィルタ＆ソート
   type SortKey = 'roast_date' | 'roast_level' | 'ppg' | 'name'
@@ -392,27 +398,29 @@ const RATING_OPTIONS5: { value: string; label: string }[] = [
   { value: '2',  label: '1' },
 ];
 
-/** 味評価用の5段階セレクト（値は必ず「文字列」を保持） */
+// 置き換え（RatingSelect 本体）
 const RatingSelect = ({
   k, label,
 }: {
   k: 'overall'|'clean'|'flavor'|'acidity'|'bitterness'|'sweetness'|'body'|'aftertaste';
   label: string;
 }) => {
-  const val = String(form?.ratings?.[k] ?? '')
+  const val = String((form?.ratings?.[k] ?? '')); // ← ここで必ず文字列化
 
   return (
     <div className="flex flex-col gap-1">
       <label className="text-xs text-gray-600">{label}</label>
       <select
         className="border rounded p-2 text-sm"
-        value={val}                                   // ← 文字列
-        onChange={(e) => handleRating(k, e.target.value)} // ← 文字列のまま保存
+        value={val}                              // ← 常に文字列
+        onChange={(e)=> handleRating(k, e.target.value)} // ← 文字列で保存
       >
         <option value="">未選択</option>
-        {RATING_OPTIONS5.map(opt => (
-          <option key={opt.value} value={opt.value}>{opt.label}</option>
-        ))}
+        <option value="10">5 とても良い</option>
+        <option value="8">4 良い</option>
+        <option value="6">3 ふつう</option>
+        <option value="4">2 やや弱い</option>
+        <option value="2">1 弱い</option>
       </select>
     </div>
   );
