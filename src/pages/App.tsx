@@ -1,11 +1,11 @@
 // src/pages/App.tsx
 import React, { useEffect, useState } from 'react'
-import { DripList } from '../components/DripList'
+import DripList from '../components/DripList'          // ← ここをデフォルトインポートに変更
 import { BeanForm } from '../components/BeanForm'
 import { DripForm } from '../components/DripForm'
 import MissingOrigins from '../components/MissingOrigins'
 
-// API は一度だけ決定（VITE_BACKEND_URL → VITE_API → ローカルの優先順）
+// API は一度だけ決定（VITE_BACKEND_URL → VITE_API → ローカル）
 const API =
   (import.meta as any).env?.VITE_BACKEND_URL ||
   (import.meta as any).env?.VITE_API ||
