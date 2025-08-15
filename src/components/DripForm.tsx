@@ -6,7 +6,7 @@ import {
   ScatterChart, Scatter
 } from 'recharts'
 
-import { filterSortBeans, beanOptionLabel } from '../utils/beanFilters'
+import { filterSortBeans, beanOptionLabel, ROASTS } from '../utils/beanFilters'
 import { ORIGINS } from '../constants/origins'
 import { ORIGIN_THEORIES } from '../constants/originTheories'
 
@@ -76,36 +76,33 @@ const corr = (pairs: Array<[number, number]>)=>{
   return den===0 ? null : (num/den)
 }
 
-/** パーセンタイル（0..1） */
-const percentile = (arr: number[], p: number) => {
-  if (!arr.length) return null
-  const a = [...arr].sort((x,y)=>x-y)
-  const idx = (a.length-1)*p
-  const lo = Math.floor(idx), hi = Math.ceil(idx)
-  if (lo === hi) return a[lo]
-  const w = idx - lo
-  return a[lo]*(1-w) + a[hi]*w
+/** 近焙煎度セット（前後1つ＋同一） */
+const nearRoastSet = (level?: string|null) => {
+  if(!level) return new Set<string>()
+  const idx = ROASTS.indexOf(level)
+  if(idx<0) return new Set<string>([level])
+  return new Set([ROASTS[idx-1], ROASTS[idx], ROASTS[idx+1]].filter(Boolean))
 }
-
-/** 中央値 */
-const median = (arr: number[]) => (percentile(arr, 0.5))
 
 export function DripForm({API, beans, onSaved}:{API:string; beans:any[]; onSaved:()=>void}){
   const [form,setForm] = useState<any>({ ratings:{} })
   const [derive, setDerive] = useState<any>(null)
   const [beanStats, setBeanStats] = useState<any>(null)
   const [beanDrips, setBeanDrips] = useState<any[]>([])
-  const [allDrips, setAllDrips] = useState<any[]>([])               // 🔵 追加：全ドリップ
+  const [allDrips, setAllDrips] = useState<any[]>([])
   const [radarData, setRadarData] = useState<any[]>([])
   const [yMetric, setYMetric] = useState<'overall'|'clean'|'flavor'|'body'>('overall')
   const [editingDripId, setEditingDripId] = useState<number|null>(null)
   const [last, setLast] = useState<any|null>(null)
 
-  // 暫定最適候補
+  // 暫定最適：2系統のベスト
+  const [bestSameRoast, setBestSameRoast] = useState<any|null>(null)
+  const [bestOriginNear, setBestOriginNear] = useState<any|null>(null)
+
+  // セレクト＆適用ボタン用
   type BestPattern = {
-    id: string
+    id: 'sameRoast'|'originNear'
     label: string
-    sourceCount?: number
     fields: Partial<{
       grind:number
       water_temp_c:number
@@ -118,7 +115,7 @@ export function DripForm({API, beans, onSaved}:{API:string; beans:any[]; onSaved
     }>
   }
   const [bestPatterns, setBestPatterns] = useState<BestPattern[]>([])
-  const [selectedPatternId, setSelectedPatternId] = useState<string>('')
+  const [selectedPatternId, setSelectedPatternId] = useState<BestPattern['id']|''>('')
 
   // 前回値適用
   const applyLast = () => {
@@ -202,16 +199,21 @@ export function DripForm({API, beans, onSaved}:{API:string; beans:any[]; onSaved
       .catch(()=> setLast(null))
   },[form.bean_id, API])
 
-  // ドリップ取得（全件 & 指定豆）
+  // ドリップ取得＆“ベスト”抽出＆レーダーデータ作成
   useEffect(()=>{
-    if(!form.bean_id){ setBeanDrips([]); setRadarData([]); setAllDrips([]); return }
+    if(!form.bean_id){ setBeanDrips([]); setAllDrips([]); setBestPatterns([]); setSelectedPatternId(''); setBestSameRoast(null); setBestOriginNear(null); setRadarData([]); return }
     ;(async ()=>{
       const r = await fetch(`${API}/api/drips`)
       const all = await r.json()
-      setAllDrips(all) // 🔵 保存
-      const mine = all.filter((d:any)=> String(d.bean_id)===String(form.bean_id))
+      setAllDrips(all)
 
-      const keys = [
+      const targetBean = beans.find(b=> String(b.id)===String(form.bean_id))
+      const beansById: Record<string, any> = {}
+      for (const b of beans) beansById[String(b.id)] = b
+
+      const mine = all.filter((d:any)=> String(d.bean_id)===String(form.bean_id))
+      // レーダー：この豆の平均
+      const radarKeys = [
         {key:'clean', label:'クリーンさ'},
         {key:'flavor', label:'風味'},
         {key:'acidity', label:'酸味'},
@@ -220,130 +222,81 @@ export function DripForm({API, beans, onSaved}:{API:string; beans:any[]; onSaved
         {key:'body', label:'コク'},
         {key:'aftertaste', label:'後味'},
       ]
-      const rd = keys.map(k=>{
+      const beanAvgMap: Record<string, number> = {}
+      for (const k of radarKeys){
         const vals = mine.map((d:any)=> d.ratings?.[k.key]).filter((x:any)=> typeof x==='number')
-        const avg = vals.length? (vals.reduce((a:number,b:number)=>a+b,0)/vals.length) : 0
-        return { subject: k.label, value: avg }
-      })
-      setRadarData(rd)
+        beanAvgMap[k.key] = vals.length? (vals.reduce((a:number,b:number)=>a+b,0)/vals.length) : 0
+      }
 
+      // 相関用 Δ を付与
       const withDeltas = mine.map((d:any)=>{
         const roast = d.roast_level ?? 'シティ'
         const recTemp = (d.derived?.recommended?.temp_c as number | undefined) ?? (ROAST_TEMP[roast] ?? 82.5)
         const tempDelta = (typeof d.water_temp_c === 'number' && Number.isFinite(recTemp)) ? (d.water_temp_c - recTemp) : null
-
         const label20 = d.derive?.grind?.label20 || d.label20 || null
         const group = toGrindGroup(label20)
         const recTime = group ? GRIND_TIME[group] : null
-
         const actSec = (typeof d.time_sec === 'number') ? d.time_sec : null
         const timeDelta = (actSec!=null && recTime!=null) ? (actSec - recTime) : null
-
         return { ...d, _deltas: { temp_delta: tempDelta, time_delta: timeDelta } }
       })
       setBeanDrips(withDeltas)
+
+      // ---- “ベスト”抽出 ----
+      const shareOrigin = (b1:any, b2:any)=>{
+        const a = String(b1?.origin||'').split(',').map((s:string)=>s.trim()).filter(Boolean)
+        const b = String(b2?.origin||'').split(',').map((s:string)=>s.trim()).filter(Boolean)
+        return a.some(x=> b.includes(x))
+      }
+      const nearSet = nearRoastSet(targetBean?.roast_level)
+
+      const sortBest = (arr:any[]) =>
+        arr.filter(d=> Number.isFinite(Number(d?.ratings?.overall)))
+           .sort((a,b)=> Number(b.ratings.overall) - Number(a.ratings.overall) || (new Date(b.brew_date).getTime() - new Date(a.brew_date).getTime()))
+
+      const sameRoastCandidates = all.filter((d:any)=>{
+        const bb = beansById[String(d.bean_id)]
+        return bb && targetBean && bb.roast_level === targetBean.roast_level
+      })
+      const originNearCandidates = all.filter((d:any)=>{
+        const bb = beansById[String(d.bean_id)]
+        return bb && targetBean && shareOrigin(targetBean, bb) && nearSet.has(bb.roast_level)
+      })
+
+      const bestSR = sortBest(sameRoastCandidates)[0] || null
+      const bestON = sortBest(originNearCandidates)[0] || null
+      setBestSameRoast(bestSR)
+      setBestOriginNear(bestON)
+
+      // パターン（適用用）
+      const mkFields = (d:any)=> d ? ({
+        grind: d.grind,
+        water_temp_c: d.water_temp_c,
+        dose_g: d.dose_g,
+        water_g: d.water_g,
+        drawdown_g: d.drawdown_g ?? null,
+        time: secToMMSS(d.time_sec),
+        dripper: d.dripper ?? null,
+        storage: d.storage ?? null,
+      }) : {}
+      const pats: BestPattern[] = []
+      if (bestSR) pats.push({ id:'sameRoast', label:`同焙煎度ベスト（★${bestSR.ratings?.overall ?? '-'} / ${bestSR.brew_date} / ${bestSR.dripper ?? '—'}）`, fields: mkFields(bestSR) })
+      if (bestON) pats.push({ id:'originNear', label:`同産地×近焙煎度ベスト（★${bestON.ratings?.overall ?? '-'} / ${bestON.brew_date} / ${bestON.dripper ?? '—'}）`, fields: mkFields(bestON) })
+      setBestPatterns(pats)
+      setSelectedPatternId(pats[0]?.id || '')
+
+      // レーダー：横並び比較（この豆平均 / 同焙煎度ベスト / 同産地×近焙煎度ベスト）
+      const srRatings = bestSR?.ratings || {}
+      const onRatings = bestON?.ratings || {}
+      const rd = radarKeys.map(k=> ({
+        subject: k.label,
+        beanAvg: Number(beanAvgMap[k.key] ?? 0),
+        sameRoastBest: Number(srRatings?.[k.key] ?? 0),
+        originNearBest: Number(onRatings?.[k.key] ?? 0),
+      }))
+      setRadarData(rd)
     })()
-  },[form.bean_id, API])
-
-  // 暫定最適パターン生成
-  useEffect(()=>{
-    const b = beans.find(x=> String(x.id)===String(form.bean_id))
-    if (!b) { setBestPatterns([]); setSelectedPatternId(''); return }
-
-    const firstOrigins = String(b.origin||'').split(',').map((s:string)=>s.trim()).filter(Boolean)
-    const shareOrigin = (bean2:any) =>{
-      if (!bean2?.origin) return false
-      const os2 = String(bean2.origin).split(',').map((s:string)=>s.trim())
-      return firstOrigins.some(o => os2.includes(o))
-    }
-
-    const byId: Record<string, any> = {}
-    for (const bean of beans) byId[String(bean.id)] = bean
-
-    // 候補抽出
-    const candidatesSameBean = allDrips.filter(d => String(d.bean_id)===String(b.id))
-    const candidatesSameRoast = allDrips.filter(d => String(d.bean_id)!==String(b.id) && byId[String(d.bean_id)]?.roast_level === b.roast_level)
-    const candidatesSameOrigin = allDrips.filter(d => {
-      const bb = byId[String(d.bean_id)]
-      return String(d.bean_id)!==String(b.id) && bb && shareOrigin(bb)
-    })
-
-    const takeTop = (arr:any[], k:number) => {
-      return arr
-        .filter(d=> Number.isFinite(Number(d?.ratings?.overall)))
-        .sort((a,b)=> Number(b.ratings.overall) - Number(a.ratings.overall) || (new Date(b.brew_date).getTime() - new Date(a.brew_date).getTime()))
-        .slice(0,k)
-    }
-
-    const buildSingle = (title:string, d:any): BestPattern | null => {
-      if (!d) return null
-      return {
-        id: `single:${title}:${d.id}`,
-        label: `${title} ベスト（★${d.ratings?.overall ?? '-'} / ${d.brew_date} / ${d.dripper ?? '—'}）`,
-        fields: {
-          grind: d.grind,
-          water_temp_c: d.water_temp_c,
-          dose_g: d.dose_g,
-          water_g: d.water_g,
-          drawdown_g: d.drawdown_g ?? null,
-          time: secToMMSS(d.time_sec),
-          dripper: d.dripper ?? null,
-          storage: d.storage ?? null,
-        }
-      }
-    }
-
-    const buildRange = (title:string, arr:any[], kShow:number): BestPattern | null => {
-      const top = takeTop(arr, kShow)
-      if (!top.length) return null
-      const num = (xs:(number|null|undefined)[]) => xs.map(v=> Number(v)).filter(v=>Number.isFinite(v)) as number[]
-      const g  = median(num(top.map(d=>d.grind)))
-      const wt = median(num(top.map(d=>d.water_temp_c)))
-      const dg = median(num(top.map(d=>d.dose_g)))
-      const wg = median(num(top.map(d=>d.water_g)))
-      const dd = median(num(top.map(d=>d.drawdown_g)))
-      const ts = median(num(top.map(d=>d.time_sec)))
-      // 代表ドリッパー：最頻値
-      const mode = (values:(string|null|undefined)[])=>{
-        const m = new Map<string, number>()
-        for(const v of values){ if(!v) continue; m.set(v,(m.get(v)||0)+1) }
-        let best: string|undefined, cnt = -1
-        for(const [k,c] of m){ if(c>cnt){ best=k; cnt=c } }
-        return best
-      }
-      const dr = mode(top.map(d=>d.dripper))
-      const st = mode(top.map(d=>d.storage))
-      return {
-        id: `range:${title}:${top.map(d=>d.id).join(',')}`,
-        label: `${title} トップ${top.length}中央値`,
-        sourceCount: top.length,
-        fields: {
-          grind: g ?? undefined,
-          water_temp_c: wt ?? undefined,
-          dose_g: dg ?? undefined,
-          water_g: wg ?? undefined,
-          drawdown_g: (dd ?? null) as any,
-          time: secToMMSS(ts ?? undefined),
-          dripper: dr ?? null,
-          storage: st ?? null,
-        }
-      }
-    }
-
-    const pats: BestPattern[] = []
-    const sbTop1 = takeTop(candidatesSameBean, 1)[0]
-    const srTop1 = takeTop(candidatesSameRoast, 1)[0]
-    const soTop1 = takeTop(candidatesSameOrigin, 1)[0]
-    buildSingle('同一豆', sbTop1) && pats.push(buildSingle('同一豆', sbTop1)!)
-    buildSingle('同焙煎度', srTop1) && pats.push(buildSingle('同焙煎度', srTop1)!)
-    buildSingle('同産地系', soTop1) && pats.push(buildSingle('同産地系', soTop1)!)
-    buildRange('同一豆', candidatesSameBean, 3) && pats.push(buildRange('同一豆', candidatesSameBean, 3)!)
-    buildRange('同焙煎度', candidatesSameRoast, 5) && pats.push(buildRange('同焙煎度', candidatesSameRoast, 5)!)
-    buildRange('同産地系', candidatesSameOrigin, 5) && pats.push(buildRange('同産地系', candidatesSameOrigin, 5)!)
-
-    setBestPatterns(pats)
-    setSelectedPatternId(pats[0]?.id || '')
-  },[form.bean_id, beans, allDrips])
+  },[form.bean_id, API, beans])
 
   const validate = ()=>{
     if(!form.bean_id) return '使用豆'
@@ -446,7 +399,7 @@ export function DripForm({API, beans, onSaved}:{API:string; beans:any[]; onSaved
   const hasStats     = !!(beanStats && Number(beanStats.count) > 0)
   const hasAvg       = !!(hasStats && beanStats.avg_overall != null)
   const hasByMethod  = !!(hasStats && Array.isArray(beanStats.by_method) && beanStats.by_method.length > 0)
-  const hasRadar     = !!(Array.isArray(radarData) && radarData.some(d => Number(d.value) > 0))
+  const hasRadar     = !!(Array.isArray(radarData) && radarData.some(d => (d.beanAvg||d.sameRoastBest||d.originNearBest) > 0))
   const hasPairsTemp = (beanPairsTemp.length > 0)
   const hasPairsTime = (beanPairsTime.length > 0)
 
@@ -515,22 +468,16 @@ export function DripForm({API, beans, onSaved}:{API:string; beans:any[]; onSaved
           )}
 
           {bestPatterns.length>0 && (
-            <>
-              <div className="flex items-center gap-2">
-                <select
-                  className="border rounded p-1"
-                  value={selectedPatternId}
-                  onChange={e=>setSelectedPatternId(e.target.value)}
-                >
-                  {bestPatterns.map(p=>(
-                    <option key={p.id} value={p.id}>{p.label}</option>
-                  ))}
-                </select>
-                <button type="button" onClick={applyBest} className="px-2 py-1 rounded border bg-white hover:bg-gray-50">
-                  暫定最適値を適用
-                </button>
-              </div>
-            </>
+            <div className="flex items-center gap-2">
+              <select className="border rounded p-1" value={selectedPatternId} onChange={e=>setSelectedPatternId(e.target.value as any)}>
+                {bestPatterns.map(p=>(
+                  <option key={p.id} value={p.id}>{p.label}</option>
+                ))}
+              </select>
+              <button type="button" onClick={applyBest} className="px-2 py-1 rounded border bg-white hover:bg-gray-50">
+                暫定最適値を適用
+              </button>
+            </div>
           )}
         </div>
       )}
@@ -565,20 +512,25 @@ export function DripForm({API, beans, onSaved}:{API:string; beans:any[]; onSaved
 
         {hasAvg && (<div className="text-sm">平均評価（★）：<StarRow avg={beanStats?.avg_overall} /></div>)}
 
+        {/* レーダー：この豆の平均 / 同焙煎度ベスト / 同産地×近焙煎度ベスト */}
         {hasRadar && (
-          <div className="h-48">
+          <div className="h-56">
             <ResponsiveContainer>
               <RadarChart data={radarData}>
                 <PolarGrid />
                 <PolarAngleAxis dataKey="subject" />
                 <PolarRadiusAxis angle={30} domain={[0, 10]} />
-                <Radar name="avg" dataKey="value" stroke="" fill="" fillOpacity={0.3} />
+                <Radar name="この豆の平均" dataKey="beanAvg" fillOpacity={0.2} />
+                {bestSameRoast && <Radar name="同焙煎度ベスト" dataKey="sameRoastBest" fillOpacity={0.2} />}
+                {bestOriginNear && <Radar name="産地×近焙煎度ベスト" dataKey="originNearBest" fillOpacity={0.2} />}
+                <Legend />
                 <Tooltip />
               </RadarChart>
             </ResponsiveContainer>
           </div>
         )}
 
+        {/* 豆ごとバー（抽出方法別平均） */}
         {hasStats && (
           <div className="text-xs">
             記録数：{beanStats.count}　平均：{beanStats.avg_overall}　最高：{beanStats.max_overall}
@@ -792,7 +744,7 @@ export function DripForm({API, beans, onSaved}:{API:string; beans:any[]; onSaved
               <PolarGrid />
               <PolarAngleAxis dataKey="subject" />
               <PolarRadiusAxis angle={30} domain={[0,10]} />
-              <Radar name="now" dataKey="value" stroke="" fill="" fillOpacity={0.3} />
+              <Radar name="now" dataKey="value" fillOpacity={0.3} />
               <Tooltip />
             </RadarChart>
           </ResponsiveContainer>
