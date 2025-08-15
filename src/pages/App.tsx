@@ -3,6 +3,7 @@ import GlobalStats from '../components/GlobalStats'
 import { BeanForm } from '../components/BeanForm'
 import { DripForm } from '../components/DripForm'
 import MissingOrigins from '../components/MissingOrigins'
+import DripList from '../components/DripList'
 
 const API = import.meta.env.VITE_BACKEND_URL || 'https://<your-username>.pythonanywhere.com'
 
@@ -52,4 +53,9 @@ export default function App(){
       <GlobalStats API={API} />
     </div>
   )
+  // ・・・既存の return の下部、統計や散布図のセクションの「手前」か「後ろ」に下を挿入
+<section className="p-4 bg-white rounded-2xl shadow">
+  <h3 className="font-semibold mb-2">最近のドリップ履歴（編集・削除）</h3>
+  <DripList API={API} onChanged={()=>{ fetchDrips(); fetchStats(); }} />
+</section>
 }
