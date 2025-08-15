@@ -399,8 +399,7 @@ const RatingSelect = ({
   k: 'overall'|'clean'|'flavor'|'acidity'|'bitterness'|'sweetness'|'body'|'aftertaste';
   label: string;
 }) => {
-  // ← ★ ここがポイント：必ず String(...) で「文字列」として扱う
-  const val = String((form?.ratings?.[k] ?? ''));
+  const val = String(form?.ratings?.[k] ?? '')
 
   return (
     <div className="flex flex-col gap-1">
