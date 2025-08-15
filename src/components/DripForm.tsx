@@ -586,7 +586,15 @@ const RatingSelect = ({
                 <Legend />
                 <Tooltip />
               </RadarChart>
-            </ResponsiveContainer>
+            <RadarChart data={[
+  { subject:'クリーンさ', value: Number(ratings.clean)      || 0 },
+  { subject:'風味',       value: Number(ratings.flavor)     || 0 },
+  { subject:'酸味',       value: Number(ratings.acidity)    || 0 },
+  { subject:'苦味',       value: Number(ratings.bitterness) || 0 },
+  { subject:'甘味',       value: Number(ratings.sweetness)  || 0 },
+  { subject:'コク',       value: Number(ratings.body)       || 0 },
+  { subject:'後味',       value: Number(ratings.aftertaste) || 0 },
+]}>
           </div>
         )}
 
