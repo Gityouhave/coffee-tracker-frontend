@@ -217,6 +217,8 @@ const filteredBeans = React.useMemo(()=>{
     body: JSON.stringify(body)
   })
   await loadBeans()
+    // 同タブで即時に App 側の beans を再取得
+try { onSaved?.() } catch {}
     // 他ページへ“豆データ更新”を通知（storageイベントで拾う）
 try { localStorage.setItem('ct_beans_dirty', String(Date.now())) } catch {}
 }
@@ -289,6 +291,7 @@ try { localStorage.setItem('ct_beans_dirty', String(Date.now())) } catch {}
     if(!r.ok){ throw new Error(`HTTP ${r.status}\n${await r.text().catch(()=> '')}`) }
     await loadBeans()
     if(editingId === dangerBean.id) clearForm()
+    try { onSaved?.() } catch {}
     try { localStorage.setItem('ct_beans_dirty', String(Date.now())) } catch {}
 // 同一タブ即時反映したい場合
 try { onSaved?.() } catch {}
