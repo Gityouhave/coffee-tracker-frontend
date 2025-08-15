@@ -383,33 +383,6 @@ if (!form.brew_date) {
     return notes.length ? notes.join(' ／ ') : '—'
   }
 
-  /** 1–10保存 ↔ 1–5表示 の相互変換 */
-const to5step = (v?: any) =>
-  Number.isFinite(Number(v)) ? Math.min(5, Math.max(1, Math.round(Number(v) / 2))) : '';
-
-const from5step = (v5: string) =>
-  v5 === '' ? '' : String(Number(v5) * 2);
-
-/** 5段階セレクトの共通コンポーネント */
-const RatingSelect = ({
-  k, label,
-}: { k: 'overall'|'clean'|'flavor'|'acidity'|'bitterness'|'sweetness'|'body'|'aftertaste'; label: string }) => (
-  <div className="flex flex-col gap-1">
-    <label className="text-xs text-gray-600">{label}</label>
-    <select
-      className="border rounded p-2 text-sm"
-      value={to5step((form as any).ratings?.[k])}
-      onChange={(e)=> handleRating(k, from5step(e.target.value))}
-    >
-      <option value="">—</option>
-      <option value="1">1（弱い）</option>
-      <option value="2">2</option>
-      <option value="3">3（中）</option>
-      <option value="4">4</option>
-      <option value="5">5（強い）</option>
-    </select>
-  </div>
-);
   // 指標切替
   const yAccessor = useMemo(()=>({
     key: `ratings.${yMetric}`,
@@ -726,24 +699,11 @@ const RatingSelect = ({
       <textarea className="w-full border rounded p-2" placeholder="手法メモ" value={form.method_memo||''} onChange={e=>handle('method_memo',e.target.value)} />
       <textarea className="w-full border rounded p-2" placeholder="感想メモ" value={form.note_memo||''} onChange={e=>handle('note_memo',e.target.value)} />
 
-      {/* 味の入力（5段階セレクト） */}
-<div className="space-y-3">
-  {/* まず全体（独立行） */}
-  <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-2">
-    <RatingSelect k="overall" label="全体（overall）" />
-  </div>
-
-  {/* 残り7項目を並列表示 */}
-  <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
-    <RatingSelect k="clean"      label="クリーンさ（clean）" />
-    <RatingSelect k="flavor"     label="風味（flavor）" />
-    <RatingSelect k="acidity"    label="酸味（acidity）" />
-    <RatingSelect k="bitterness" label="苦味（bitterness）" />
-    <RatingSelect k="sweetness"  label="甘味（sweetness）" />
-    <RatingSelect k="body"       label="コク（body）" />
-    <RatingSelect k="aftertaste" label="後味（aftertaste）" />
-  </div>
-</div>
+      <div className="grid grid-cols-4 gap-2 text-sm">
+        {['clean','flavor','acidity','bitterness','sweetness','body','aftertaste','overall'].map(k=> (
+          <input key={k} className="border rounded p-2" placeholder={`${k} 1-10`} value={form.ratings?.[k]||''} onChange={e=>handleRating(k,e.target.value)} />
+        ))}
+      </div>
 
       {/* 価格見積（豆の単価 × 使用量） */}
       {(() => {
