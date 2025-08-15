@@ -77,8 +77,7 @@ export function DripForm({API, beans, onSaved}:{API:string; beans:any[]; onSaved
   const [radarData, setRadarData] = useState<any[]>([])
   const [yMetric, setYMetric] = useState<'overall'|'clean'|'flavor'|'body'>('overall')
   const [editingDripId, setEditingDripId] = useState<number|null>(null)
-    // 前回ドリップ（同一豆の最新1件）
-  const [last, setLast] = useState<any|null>(null)
+  const [last, setLast] = useState<any|null>(null) // 前回ドリップ
 
   // 前回値をフォームに流し込む（空欄だけ上書き）
   const applyLast = () => {
@@ -101,34 +100,34 @@ export function DripForm({API, beans, onSaved}:{API:string; beans:any[]; onSaved
   const handle = (k:string,v:any)=> setForm((s:any)=> ({...s,[k]:v}))
   const handleRating = (k:string,v:any)=> setForm((s:any)=> ({...s, ratings:{...s.ratings, [k]:v}}))
 
-// 統一フィルタ＆ソート（検索・在庫・産地・ソート）—— 永続化キー共通化
-type SortKey = 'roast_date' | 'roast_level' | 'ppg' | 'name'
-type StockFilter = 'all' | 'in' | 'out'
+  // 統一フィルタ＆ソート
+  type SortKey = 'roast_date' | 'roast_level' | 'ppg' | 'name'
+  type StockFilter = 'all' | 'in' | 'out'
 
-const LS = {
-  q: 'ct_beans_q',
-  stock: 'ct_beans_stock',
-  origins: 'ct_beans_origins',
-  sort: 'ct_beans_sort',
-}
+  const LS = {
+    q: 'ct_beans_q',
+    stock: 'ct_beans_stock',
+    origins: 'ct_beans_origins',
+    sort: 'ct_beans_sort',
+  }
 
-const [q, setQ] = useState<string>(() => localStorage.getItem(LS.q) || '')
-const [stock, setStock] = useState<StockFilter>(() => (localStorage.getItem(LS.stock) as StockFilter) || 'all')
-const [originFilter, setOriginFilter] = useState<string[]>(() => {
-  try{ return JSON.parse(localStorage.getItem(LS.origins) || '[]') }catch{ return [] }
-})
-const [sort, setSort] = useState<SortKey>(() => (localStorage.getItem(LS.sort) as SortKey) || 'roast_date')
+  const [q, setQ] = useState<string>(() => localStorage.getItem(LS.q) || '')
+  const [stock, setStock] = useState<StockFilter>(() => (localStorage.getItem(LS.stock) as StockFilter) || 'all')
+  const [originFilter, setOriginFilter] = useState<string[]>(() => {
+    try{ return JSON.parse(localStorage.getItem(LS.origins) || '[]') }catch{ return [] }
+  })
+  const [sort, setSort] = useState<SortKey>(() => (localStorage.getItem(LS.sort) as SortKey) || 'roast_date')
 
-useEffect(()=>{ localStorage.setItem(LS.q, q) },[q])
-useEffect(()=>{ localStorage.setItem(LS.stock, stock) },[stock])
-useEffect(()=>{ localStorage.setItem(LS.origins, JSON.stringify(originFilter)) },[originFilter])
-useEffect(()=>{ localStorage.setItem(LS.sort, sort) },[sort])
+  useEffect(()=>{ localStorage.setItem(LS.q, q) },[q])
+  useEffect(()=>{ localStorage.setItem(LS.stock, stock) },[stock])
+  useEffect(()=>{ localStorage.setItem(LS.origins, JSON.stringify(originFilter)) },[originFilter])
+  useEffect(()=>{ localStorage.setItem(LS.sort, sort) },[sort])
 
-const filteredSortedBeans = useMemo(()=>{
-  return filterSortBeans(beans, { q, stock, origins: originFilter, sort })
-},[beans, q, stock, originFilter, sort])
+  const filteredSortedBeans = useMemo(()=>{
+    return filterSortBeans(beans, { q, stock, origins: originFilter, sort })
+  },[beans, q, stock, originFilter, sort])
 
-  // セオリー/推奨/挽き目表記（brew_date 変更でも aging を再計算させたいので依存に含める）
+  // セオリー/推奨/挽き目表記
   useEffect(()=>{
     const bean_id = form.bean_id
     if(!bean_id){ setDerive(null); return }
@@ -148,7 +147,8 @@ const filteredSortedBeans = useMemo(()=>{
     if(!form.bean_id){ setBeanStats(null); return }
     fetch(`${API}/api/stats?scope=bean&bean_id=${form.bean_id}`).then(r=>r.json()).then(setBeanStats)
   },[form.bean_id, API])
-    // 同一豆の最新ドリップを1件取得（プリセット用）
+
+  // 最新ドリップ（プリセット用）
   useEffect(()=>{
     if(!form.bean_id){ setLast(null); return }
     fetch(`${API}/api/drips/last?bean_id=${form.bean_id}`)
@@ -157,7 +157,7 @@ const filteredSortedBeans = useMemo(()=>{
       .catch(()=> setLast(null))
   },[form.bean_id, API])
 
-  // 豆ごとのドリップ取得→レーダー＆相関用の差分を作る
+  // 豆ごとのドリップ取得→レーダー＆相関用差分
   useEffect(()=>{
     if(!form.bean_id){ setBeanDrips([]); setRadarData([]); return }
     ;(async ()=>{
@@ -182,19 +182,16 @@ const filteredSortedBeans = useMemo(()=>{
       setRadarData(rd)
 
       const withDeltas = mine.map((d:any)=>{
-        // 推奨湯温はサーバが返す recommended.temp_c を最優先、なければクライアント側表でフォールバック
-const roast = d.roast_level ?? 'シティ'
-const recTemp = (d.derived?.recommended?.temp_c as number | undefined) ?? (ROAST_TEMP[roast] ?? 82.5)
-const tempDelta = (typeof d.water_temp_c === 'number' && Number.isFinite(recTemp)) ? (d.water_temp_c - recTemp) : null
+        const roast = d.roast_level ?? 'シティ'
+        const recTemp = (d.derived?.recommended?.temp_c as number | undefined) ?? (ROAST_TEMP[roast] ?? 82.5)
+        const tempDelta = (typeof d.water_temp_c === 'number' && Number.isFinite(recTemp)) ? (d.water_temp_c - recTemp) : null
 
-// 推奨時間は20段階ラベル→グループで算出（サーバ推奨が必要なら derive API を別途使う）
-const label20 = d.derive?.grind?.label20 || d.label20 || null
-const group = toGrindGroup(label20)
-const recTime = group ? GRIND_TIME[group] : null
+        const label20 = d.derive?.grind?.label20 || d.label20 || null
+        const group = toGrindGroup(label20)
+        const recTime = group ? GRIND_TIME[group] : null
 
-// 実測は mm:ss ではなく API が返す time_sec を使う
-const actSec = (typeof d.time_sec === 'number') ? d.time_sec : null
-const timeDelta = (actSec!=null && recTime!=null) ? (actSec - recTime) : null
+        const actSec = (typeof d.time_sec === 'number') ? d.time_sec : null
+        const timeDelta = (actSec!=null && recTime!=null) ? (actSec - recTime) : null
 
         return { ...d, _deltas: { temp_delta: tempDelta, time_delta: timeDelta } }
       })
@@ -250,35 +247,38 @@ const timeDelta = (actSec!=null && recTime!=null) ? (actSec - recTime) : null
   // 表示ヘルパ
   const selBean = beans.find(b=> String(b.id)===String(form.bean_id))
   const showOrDash = (cond:any, val:any, dashWhenBean?:string)=> cond ? (val ?? '—') : (dashWhenBean ?? '--')
+
   // 不明判定
-const isUnknown = (v?: any) => {
-  const s = String(v ?? '').trim()
-  return !s || s === '—' || s === '-' || s === '不明' || s.startsWith('不明')
-}
+  const isUnknown = (v?: any) => {
+    const s = String(v ?? '').trim()
+    return !s || s === '—' || s === '-' || s === '不明' || s.startsWith('不明')
+  }
 
-// 値＋セオリーを結合。どちらか不明なら省く。両方不明なら '' を返す。
-const theoryWithValue = (theory?: any, value?: any) => {
-  const t = isUnknown(theory) ? '' : String(theory)
-  const v = isUnknown(value) ? '' : String(value)
-  if (v && t) return `${v}（${t}）`
-  if (v) return v
-  if (t) return t
-  return ''
-}
+  // 値＋セオリーを結合（どちらか不明なら省略）
+  const theoryWithValue = (theory?: any, value?: any) => {
+    const t = isUnknown(theory) ? '' : String(theory)
+    const v = isUnknown(value) ? '' : String(value)
+    if (v && t) return `${v}（${t}）`
+    if (v) return v
+    if (t) return t
+    return ''
+  }
 
-// 行描画ヘルパ（テキストが空なら null で行ごと消す）
-const TheoryRow = ({
-  label, theory, value, show = true,
-}: {label:string; theory:any; value:any; show?:boolean}) => {
-  if (!show) return null
-  const txt = theoryWithValue(theory, value)
-  return txt ? <div>{label}：{txt}</div> : null
-}
+  // 行描画（空文字なら行ごと非表示）
+  const TheoryRow = ({
+    label, theory, value, show = true,
+  }: {label:string; theory:any; value:any; show?:boolean}) => {
+    if (!show) return null
+    const txt = theoryWithValue(theory, value)
+    return txt ? <div>{label}：{txt}</div> : null
+  }
+
   const StarRow = ({avg}:{avg:number|undefined})=>{
     if (avg == null || isNaN(Number(avg))) return <span>--</span>
     const s = Math.round(Number(avg)/2)
     return (<span aria-label={`rating ${s} of 5`}>{'★★★★★'.slice(0,s)}{'☆☆☆☆☆'.slice(0,5-s)} <span className="text-[11px] text-gray-500">({avg})</span></span>)
   }
+
   const optionLabel = (b:any)=>{
     const parts:string[] = []
     if (b.name) parts.push(b.name)
@@ -289,13 +289,14 @@ const TheoryRow = ({
     const base = parts.join('・')
     return b.roast_level ? `${base}（${b.roast_level}）` : base
   }
-  // ブレンド対応の産地セオリー文字列を生成（deriveが単一国しか返さない場合に備えフロントで補正）
-const originTheoryText = ()=>{
-  if(!selBean?.origin) return '—'
-  const cs = String(selBean.origin).split(',').map(s=>s.trim()).filter(Boolean)
-  const notes = cs.map(c => ORIGIN_THEORIES[c] ? `${c}：${ORIGIN_THEORIES[c]}` : '').filter(Boolean)
-  return notes.length ? notes.join(' ／ ') : '—'
-}
+
+  // ブレンド対応：産地セオリー文字列
+  const originTheoryText = ()=>{
+    if(!selBean?.origin) return '—'
+    const cs = String(selBean.origin).split(',').map(s=>s.trim()).filter(Boolean)
+    const notes = cs.map(c => ORIGIN_THEORIES[c] ? `${c}：${ORIGIN_THEORIES[c]}` : '').filter(Boolean)
+    return notes.length ? notes.join(' ／ ') : '—'
+  }
 
   // 指標切替
   const yAccessor = useMemo(()=>({
@@ -309,88 +310,86 @@ const originTheoryText = ()=>{
       .map((d:any)=> [d?._deltas?.temp_delta, d?.ratings?.[yMetric]] as [number,number])
       .filter(([x,y])=> Number.isFinite(x) && Number.isFinite(y))
   },[beanDrips, yMetric])
+
   const beanPairsTime = useMemo(()=>{
     return beanDrips
       .map((d:any)=> [d?._deltas?.time_delta, d?.ratings?.[yMetric]] as [number,number])
       .filter(([x,y])=> Number.isFinite(x) && Number.isFinite(y))
   },[beanDrips, yMetric])
+
   const rTempBean = useMemo(()=> {
     const v = corr(beanPairsTemp); return (v==null? null : Math.round(v*100)/100)
   },[beanPairsTemp])
+
   const rTimeBean = useMemo(()=> {
     const v = corr(beanPairsTime); return (v==null? null : Math.round(v*100)/100)
   },[beanPairsTime])
-   // ---- 表示条件フラグ ----
-const hasStats = !!(beanStats && Number(beanStats.count) > 0)
-const hasAvg = !!(hasStats && beanStats.avg_overall != null)
-const hasByMethod = !!(hasStats && Array.isArray(beanStats.by_method) && beanStats.by_method.length > 0)
-const hasRadar = !!(Array.isArray(radarData) && radarData.some(d => Number(d.value) > 0))
-const hasPairsTemp = (beanPairsTemp.length > 0)
-const hasPairsTime = (beanPairsTime.length > 0)
+
+  // ---- 表示条件フラグ（JSXの外で定義） ----
+  const hasStats     = !!(beanStats && Number(beanStats.count) > 0)
+  const hasAvg       = !!(hasStats && beanStats.avg_overall != null)
+  const hasByMethod  = !!(hasStats && Array.isArray(beanStats.by_method) && beanStats.by_method.length > 0)
+  const hasRadar     = !!(Array.isArray(radarData) && radarData.some(d => Number(d.value) > 0))
+  const hasPairsTemp = (beanPairsTemp.length > 0)
+  const hasPairsTime = (beanPairsTime.length > 0)
 
   return (
     <form onSubmit={submit} className="space-y-4">
       {/* ソート・絞り込み（統一仕様） */}
-<div className="flex flex-col gap-2 sm:flex-row sm:items-end">
-  <div className="flex-1">
-    <label className="block text-xs text-gray-600">フリーワード検索</label>
-    <input className="border rounded p-2 w-full text-sm" placeholder="名前・産地・品種・精製など"
-           value={q} onChange={e=>setQ(e.target.value)} />
-  </div>
-  <div>
-    <label className="block text-xs text-gray-600">在庫</label>
-    <select className="border rounded p-2 text-sm" value={stock} onChange={e=>setStock(e.target.value as any)}>
-      <option value="all">全部</option>
-      <option value="in">あり</option>
-      <option value="out">なし</option>
-    </select>
-  </div>
-  <div className="min-w-[220px]">
-    <label className="block text-xs text-gray-600">産地フィルタ（複数可）</label>
-    <select multiple className="border rounded p-2 text-sm w-full h-24"
-            value={originFilter}
-            onChange={e=>{
-              const v = Array.from(e.target.selectedOptions).map(o=>o.value)
-              setOriginFilter(v)
-            }}>
-      {ORIGINS.map(o=> <option key={o} value={o}>{o}</option>)}
-    </select>
-  </div>
-  <div>
-    <label className="block text-xs text-gray-600">ソート（昇順）</label>
-    <select className="border rounded p-2 text-sm" value={sort} onChange={e=>setSort(e.target.value as any)}>
-      <option value="roast_date">焙煎日</option>
-      <option value="roast_level">焙煎度</option>
-      <option value="ppg">g単価</option>
-      <option value="name">名前</option>
-    </select>
-  </div>
-</div>
+      <div className="flex flex-col gap-2 sm:flex-row sm:items-end">
+        <div className="flex-1">
+          <label className="block text-xs text-gray-600">フリーワード検索</label>
+          <input className="border rounded p-2 w-full text-sm" placeholder="名前・産地・品種・精製など"
+                 value={q} onChange={e=>setQ(e.target.value)} />
+        </div>
+        <div>
+          <label className="block text-xs text-gray-600">在庫</label>
+          <select className="border rounded p-2 text-sm" value={stock} onChange={e=>setStock(e.target.value as any)}>
+            <option value="all">全部</option>
+            <option value="in">あり</option>
+            <option value="out">なし</option>
+          </select>
+        </div>
+        <div className="min-w-[220px]">
+          <label className="block text-xs text-gray-600">産地フィルタ（複数可）</label>
+          <select multiple className="border rounded p-2 text-sm w-full h-24"
+                  value={originFilter}
+                  onChange={e=>{
+                    const v = Array.from(e.target.selectedOptions).map(o=>o.value)
+                    setOriginFilter(v)
+                  }}>
+            {ORIGINS.map(o=> <option key={o} value={o}>{o}</option>)}
+          </select>
+        </div>
+        <div>
+          <label className="block text-xs text-gray-600">ソート（昇順）</label>
+          <select className="border rounded p-2 text-sm" value={sort} onChange={e=>setSort(e.target.value as any)}>
+            <option value="roast_date">焙煎日</option>
+            <option value="roast_level">焙煎度</option>
+            <option value="ppg">g単価</option>
+            <option value="name">名前</option>
+          </select>
+        </div>
+      </div>
 
-      {/* 1列目：豆＆日付（並び替え済みの候補を使用） */}
+      {/* 1列目：豆＆日付 */}
       <div className="grid grid-cols-2 gap-2">
         <select className="border rounded p-2" value={form.bean_id||''} onChange={e=>handle('bean_id', e.target.value)} required>
           <option value="">使用豆を選択</option>
           {filteredSortedBeans.map((b:any) => (
-            <option key={b.id} value={b.id}>
-  {beanOptionLabel(b)}
-</option>
+            <option key={b.id} value={b.id}>{beanOptionLabel(b)}</option>
           ))}
         </select>
         <input className="border rounded p-2" type="date" value={form.brew_date||''} onChange={e=>handle('brew_date',e.target.value)} required />
       </div>
 
-            {last && (
+      {last && (
         <div className="text-xs flex items-center gap-2">
           <span className="text-gray-600">
             前回（{last.brew_date} / {last.dripper ?? '—'}）：挽き{last.grind ?? '—'}・湯温{last.water_temp_c ?? '—'}℃
             ・豆{last.dose_g ?? '—'}g・湯量{last.water_g ?? '—'}g・時間{last.time_sec!=null ? `${Math.floor(last.time_sec/60)}:${String(last.time_sec%60).padStart(2,'0')}` : '—'}
           </span>
-          <button
-            type="button"
-            onClick={applyLast}
-            className="px-2 py-1 rounded border bg-white hover:bg-gray-50"
-          >
+          <button type="button" onClick={applyLast} className="px-2 py-1 rounded border bg-white hover:bg-gray-50">
             前回値を適用
           </button>
         </div>
@@ -417,72 +416,53 @@ const hasPairsTime = (beanPairsTime.length > 0)
       <div className="bg-gray-50 border rounded p-2 space-y-2 text-sm">
         <div className="font-semibold">選択豆：{selBean?.name ?? '--'}</div>
 
-{/* 不明/—/空 は行ごと非表示 */}
-<TheoryRow
-  label="産地セオリー"
-  theory={originTheoryText()}
-  value={selBean?.origin}
-  show={!!form.bean_id}
-/>
-<TheoryRow
-  label="精製セオリー"
-  theory={derive?.theory?.process}
-  value={selBean?.process}
-  show={!!form.bean_id}
-/>
-<TheoryRow
-  label="追加処理セオリー"
-  theory={derive?.theory?.addl_process}
-  value={selBean?.addl_process}
-  show={!!form.bean_id}
-/>
+        {/* 不明/—/空 は行ごと非表示 */}
+        <TheoryRow label="産地セオリー" theory={originTheoryText()} value={selBean?.origin} show={!!form.bean_id}/>
+        <TheoryRow label="精製セオリー" theory={derive?.theory?.process} value={selBean?.process} show={!!form.bean_id}/>
+        <TheoryRow label="追加処理セオリー" theory={derive?.theory?.addl_process} value={selBean?.addl_process} show={!!form.bean_id}/>
 
-{!isUnknown(selBean?.taste_memo) && (
-  <div>テイストメモ：{selBean?.taste_memo}</div>
-)}
-{!isUnknown(selBean?.brew_policy) && (
-  <div>ドリップ方針メモ：{selBean?.brew_policy}</div>
-)}
-        {hasAvg && (   <div className="text-sm">平均評価（★）：<StarRow avg={beanStats?.avg_overall} /></div> )}
+        {!isUnknown(selBean?.taste_memo) && (<div>テイストメモ：{selBean?.taste_memo}</div>)}
+        {!isUnknown(selBean?.brew_policy) && (<div>ドリップ方針メモ：{selBean?.brew_policy}</div>)}
+
+        {hasAvg && (<div className="text-sm">平均評価（★）：<StarRow avg={beanStats?.avg_overall} /></div>)}
 
         {/* レーダー */}
         {hasRadar && (
-  <div className="h-48">
-    <ResponsiveContainer>
-      <RadarChart data={radarData}>
-        <PolarGrid />
-        <PolarAngleAxis dataKey="subject" />
-        <PolarRadiusAxis angle={30} domain={[0, 10]} />
-        <Radar name="avg" dataKey="value" stroke="" fill="" fillOpacity={0.3} />
-        <Tooltip />
-      </RadarChart>
-    </ResponsiveContainer>
-  </div>
-)}
+          <div className="h-48">
+            <ResponsiveContainer>
+              <RadarChart data={radarData}>
+                <PolarGrid />
+                <PolarAngleAxis dataKey="subject" />
+                <PolarRadiusAxis angle={30} domain={[0, 10]} />
+                <Radar name="avg" dataKey="value" stroke="" fill="" fillOpacity={0.3} />
+                <Tooltip />
+              </RadarChart>
+            </ResponsiveContainer>
+          </div>
+        )}
 
-        {/* 豆ごとバー（抽出方法別平均） */}
+        {/* 抽出方法別バー */}
         {hasStats && (
-  <div className="text-xs">
-    記録数：{beanStats.count}　平均：{beanStats.avg_overall}　最高：{beanStats.max_overall}
-  </div>
-)}
+          <div className="text-xs">
+            記録数：{beanStats.count}　平均：{beanStats.avg_overall}　最高：{beanStats.max_overall}
+          </div>
+        )}
+        {hasByMethod && (
+          <div className="h-40">
+            <ResponsiveContainer>
+              <BarChart data={beanStats.by_method}>
+                <CartesianGrid strokeDasharray="3 3" />
+                <XAxis dataKey="dripper" />
+                <YAxis />
+                <Tooltip />
+                <Legend />
+                <Bar dataKey="avg_overall" />
+              </BarChart>
+            </ResponsiveContainer>
+          </div>
+        )}
 
-{hasByMethod && (
-  <div className="h-40">
-    <ResponsiveContainer>
-      <BarChart data={beanStats.by_method}>
-        <CartesianGrid strokeDasharray="3 3" />
-        <XAxis dataKey="dripper" />
-        <YAxis />
-        <Tooltip />
-        <Legend />
-        <Bar dataKey="avg_overall" />
-      </BarChart>
-    </ResponsiveContainer>
-  </div>
-)}
-
-        {/* 豆ごと相関：湯温差 / 時間差 */}
+        {/* 相関：湯温差 / 時間差 */}
         <div className="flex items-center gap-2 text-xs">
           <span>評価指標：</span>
           <select className="border rounded p-1" value={yMetric} onChange={e=>setYMetric(e.target.value as any)}>
@@ -496,47 +476,48 @@ const hasPairsTime = (beanPairsTime.length > 0)
         {/* 湯温差 vs 指標 */}
         <div>
           {hasPairsTemp && (
-  <div>
-    <div className="font-semibold mb-1">
-      湯温差（実測−推奨） vs {yAccessor.label}
-      <span className="ml-2 text-xs text-gray-500">r={rTempBean ?? '—'}</span>
-    </div>
-    <div className="h-44">
-      <ResponsiveContainer>
-        <ScatterChart>
-          <CartesianGrid />
-          <XAxis dataKey="_deltas.temp_delta" name="tempΔ(°C)" />
-          <YAxis dataKey={yAccessor.key} name={yAccessor.label} />
-          <Tooltip />
-          <Scatter name="drips" data={beanDrips} />
-        </ScatterChart>
-      </ResponsiveContainer>
-    </div>
-  </div>
-)}
+            <div>
+              <div className="font-semibold mb-1">
+                湯温差（実測−推奨） vs {yAccessor.label}
+                <span className="ml-2 text-xs text-gray-500">r={rTempBean ?? '—'}</span>
+              </div>
+              <div className="h-44">
+                <ResponsiveContainer>
+                  <ScatterChart>
+                    <CartesianGrid />
+                    <XAxis dataKey="_deltas.temp_delta" name="tempΔ(°C)" />
+                    <YAxis dataKey={yAccessor.key} name={yAccessor.label} />
+                    <Tooltip />
+                    <Scatter name="drips" data={beanDrips} />
+                  </ScatterChart>
+                </ResponsiveContainer>
+              </div>
+            </div>
+          )}
         </div>
 
         {/* 時間差 vs 指標 */}
         <div>
           {hasPairsTime && (
-  <div>
-    <div className="font-semibold mb-1">
-      時間差（実測秒−推奨秒） vs {yAccessor.label}
-      <span className="ml-2 text-xs text-gray-500">r={rTimeBean ?? '—'}</span>
-    </div>
-    <div className="h-44">
-      <ResponsiveContainer>
-        <ScatterChart>
-          <CartesianGrid />
-          <XAxis dataKey="_deltas.time_delta" name="timeΔ(s)" />
-          <YAxis dataKey={yAccessor.key} name={yAccessor.label} />
-          <Tooltip />
-          <Scatter name="drips" data={beanDrips} />
-        </ScatterChart>
-      </ResponsiveContainer>
-    </div>
-  </div>
-)}
+            <div>
+              <div className="font-semibold mb-1">
+                時間差（実測秒−推奨秒） vs {yAccessor.label}
+                <span className="ml-2 text-xs text-gray-500">r={rTimeBean ?? '—'}</span>
+              </div>
+              <div className="h-44">
+                <ResponsiveContainer>
+                  <ScatterChart>
+                    <CartesianGrid />
+                    <XAxis dataKey="_deltas.time_delta" name="timeΔ(s)" />
+                    <YAxis dataKey={yAccessor.key} name={yAccessor.label} />
+                    <Tooltip />
+                    <Scatter name="drips" data={beanDrips} />
+                  </ScatterChart>
+                </ResponsiveContainer>
+              </div>
+            </div>
+          )}
+        </div>
       </div>
 
       {/* 入力群：各入力直下に推奨/差分 */}
