@@ -92,6 +92,11 @@ export function DripForm({API, beans, onSaved}:{API:string; beans:any[]; onSaved
 const [dripDate, setDripDate] = useState<string>(
   new Date().toISOString().slice(0, 10) // 今日の日付を初期値に
 )
+  // 先頭の state 群の近くに追加
+const [ratings, setRatings] = useState<{
+  overall?: string; clean?: string; flavor?: string; acidity?: string;
+  bitterness?: string; sweetness?: string; body?: string; aftertaste?: string;
+}>({});
   const [beanDrips, setBeanDrips] = useState<any[]>([])
   const [allDrips, setAllDrips] = useState<any[]>([])
   const [radarData, setRadarData] = useState<any[]>([])
@@ -157,12 +162,8 @@ const [dripDate, setDripDate] = useState<string>(
   }
 
   const handle = (k:string,v:any)=> setForm((s:any)=> ({...s,[k]:v}))
-  // 置き換え（関数の上の方）
-const handleRating = React.useCallback((k: string, v: any) => {
-  setForm((s: any) => ({
-    ...s,
-    ratings: { ...s.ratings, [k]: String(v ?? '') }, // ← 必ず文字列
-  }));
+const handleRating = React.useCallback((k: keyof typeof ratings, v: string) => {
+  setRatings((s) => ({ ...s, [k]: v }));   // ← form は触らない
 }, []);
 
   // 統一フィルタ＆ソート
@@ -342,14 +343,15 @@ if (!form.brew_date) {
       storage: form.storage || null,
       method_memo: form.method_memo || null,
       note_memo: form.note_memo || null,
-      clean: form.ratings?.clean? parseInt(form.ratings.clean): null,
-      flavor: form.ratings?.flavor? parseInt(form.ratings.flavor): null,
-      acidity: form.ratings?.acidity? parseInt(form.ratings.acidity): null,
-      bitterness: form.ratings?.bitterness? parseInt(form.ratings.bitterness): null,
-      sweetness: form.ratings?.sweetness? parseInt(form.ratings.sweetness): null,
-      body: form.ratings?.body? parseInt(form.ratings.body): null,
-      aftertaste: form.ratings?.aftertaste? parseInt(form.ratings.aftertaste): null,
-      overall: form.ratings?.overall? parseInt(form.ratings.overall): null,
+      
+      clean:       ratings.clean       ? parseInt(ratings.clean)       : null,
+  flavor:      ratings.flavor      ? parseInt(ratings.flavor)      : null,
+  acidity:     ratings.acidity     ? parseInt(ratings.acidity)     : null,
+  bitterness:  ratings.bitterness  ? parseInt(ratings.bitterness)  : null,
+  sweetness:   ratings.sweetness   ? parseInt(ratings.sweetness)   : null,
+  body:        ratings.body        ? parseInt(ratings.body)        : null,
+  aftertaste:  ratings.aftertaste  ? parseInt(ratings.aftertaste)  : null,
+  overall:     ratings.overall     ? parseInt(ratings.overall)     : null,
     }
     const url = editingDripId ? `${API}/api/drips/${editingDripId}` : `${API}/api/drips`
     const method = editingDripId ? 'PUT' : 'POST'
@@ -398,25 +400,21 @@ const RATING_OPTIONS5: { value: string; label: string }[] = [
   { value: '2',  label: '1' },
 ];
 
-// 置き換え（RatingSelect 本体）
+// 置き換え
 const RatingSelect = ({
   k, label,
 }: {
-  k: 'overall'|'clean'|'flavor'|'acidity'|'bitterness'|'sweetness'|'body'|'aftertaste';
+  k: keyof typeof ratings;
   label: string;
 }) => {
-  const val = String((form?.ratings?.[k] ?? '')); // ← ここで必ず文字列化
-
+  const val = ratings[k] ?? '';   // ← form ではなく ratings を参照
   return (
     <div className="flex flex-col gap-1">
       <label className="text-xs text-gray-600">{label}</label>
       <select
         className="border rounded p-2 text-sm"
-        value={val}                              // ← 常に文字列
-        onChange={(e) => {
-  console.log('handleRating', k, e.target.value);   // ← これが毎回出るか確認
-  handleRating(k, e.target.value);
-}}
+        value={val}
+        onChange={(e)=> handleRating(k, e.target.value)}
       >
         <option value="">未選択</option>
         <option value="10">5 とても良い</option>
@@ -788,7 +786,7 @@ const RatingSelect = ({
 
         <div className="text-sm">
           {(() => {
-            const r = form.ratings || {}
+            const r = ratings || {}
             const nums = Object.entries(r)
               .map(([k,v]: any)=> (v!=='' && v!=null ? Number(v) : null))
               .filter((x:any)=> Number.isFinite(x)) as number[]
