@@ -84,50 +84,14 @@ const nearRoastSet = (level?: string|null) => {
   return new Set([ROASTS[idx-1], ROASTS[idx], ROASTS[idx+1]].filter(Boolean))
 }
 
-// ここまではユーティリティ類（nearRoastSet まで）
-
 export function DripForm({API, beans, onSaved}:{API:string; beans:any[]; onSaved:()=>void}){
-  // --- ここから（コンポーネント内） ---
-  const [form, setForm] = useState<any>({ ratings:{} })
+  const [form,setForm] = useState<any>({ ratings:{} })
   const [derive, setDerive] = useState<any>(null)
   const [beanStats, setBeanStats] = useState<any>(null)
-  const [dripDate, setDripDate] = useState<string>(
-    new Date().toISOString().slice(0, 10)
-  )
-  // --- ここまで（コンポーネント内） ---
-const DRAFT_RATINGS_KEY = 'ct_drip_draft_ratings';
-const loadDraftRatings = (): Record<string, string> => {
-  try {
-    const raw = localStorage.getItem(DRAFT_RATINGS_KEY);
-    if (!raw) return {};
-    const obj = JSON.parse(raw);
-    return (obj && typeof obj === 'object') ? obj : {};
-  } catch {
-    return {};
-  }
-};
-const saveDraftRatings = (r: Record<string, string>) => {
-  try {
-    localStorage.setItem(DRAFT_RATINGS_KEY, JSON.stringify(r));
-  } catch {}
-};
-// === ここまで追記 ===
-// ratings の型と初期値（localStorage から復元）
-const [ratings, setRatings] = useState<{
-  overall?: string; clean?: string; flavor?: string; acidity?: string;
-  bitterness?: string; sweetness?: string; body?: string; aftertaste?: string;
-}>(() => loadDraftRatings());
-
-// ratings が変わるたびに保存
-useEffect(() => {
-  // undefined を落として string のみ保存
-  const sanitized: Record<string, string> = {};
-  (['overall','clean','flavor','acidity','bitterness','sweetness','body','aftertaste'] as const).forEach(k => {
-    const v = ratings?.[k];
-    if (typeof v === 'string') sanitized[k] = v;
-  });
-  saveDraftRatings(sanitized);
-}, [ratings]);
+  // 既存の他の useState 定義と並べる
+const [dripDate, setDripDate] = useState<string>(
+  new Date().toISOString().slice(0, 10) // 今日の日付を初期値に
+)
   const [beanDrips, setBeanDrips] = useState<any[]>([])
   const [allDrips, setAllDrips] = useState<any[]>([])
   const [radarData, setRadarData] = useState<any[]>([])
@@ -193,12 +157,7 @@ useEffect(() => {
   }
 
   const handle = (k:string,v:any)=> setForm((s:any)=> ({...s,[k]:v}))
-const handleRating = React.useCallback(
-  (k: 'overall'|'clean'|'flavor'|'acidity'|'bitterness'|'sweetness'|'body'|'aftertaste', v: string) => {
-    setRatings((s) => ({ ...s, [k]: v ?? '' }));
-  },
-  []
-);
+  const handleRating = (k:string,v:any)=> setForm((s:any)=> ({...s, ratings:{...s.ratings, [k]:v}}))
 
   // 統一フィルタ＆ソート
   type SortKey = 'roast_date' | 'roast_level' | 'ppg' | 'name'
@@ -377,26 +336,19 @@ if (!form.brew_date) {
       storage: form.storage || null,
       method_memo: form.method_memo || null,
       note_memo: form.note_memo || null,
-      
-      clean:       ratings.clean       ? parseInt(ratings.clean)       : null,
-  flavor:      ratings.flavor      ? parseInt(ratings.flavor)      : null,
-  acidity:     ratings.acidity     ? parseInt(ratings.acidity)     : null,
-  bitterness:  ratings.bitterness  ? parseInt(ratings.bitterness)  : null,
-  sweetness:   ratings.sweetness   ? parseInt(ratings.sweetness)   : null,
-  body:        ratings.body        ? parseInt(ratings.body)        : null,
-  aftertaste:  ratings.aftertaste  ? parseInt(ratings.aftertaste)  : null,
-  overall:     ratings.overall     ? parseInt(ratings.overall)     : null,
+      clean: form.ratings?.clean? parseInt(form.ratings.clean): null,
+      flavor: form.ratings?.flavor? parseInt(form.ratings.flavor): null,
+      acidity: form.ratings?.acidity? parseInt(form.ratings.acidity): null,
+      bitterness: form.ratings?.bitterness? parseInt(form.ratings.bitterness): null,
+      sweetness: form.ratings?.sweetness? parseInt(form.ratings.sweetness): null,
+      body: form.ratings?.body? parseInt(form.ratings.body): null,
+      aftertaste: form.ratings?.aftertaste? parseInt(form.ratings.aftertaste): null,
+      overall: form.ratings?.overall? parseInt(form.ratings.overall): null,
     }
     const url = editingDripId ? `${API}/api/drips/${editingDripId}` : `${API}/api/drips`
     const method = editingDripId ? 'PUT' : 'POST'
     const r = await fetch(url, {method, headers:{'Content-Type':'application/json'}, body: JSON.stringify(payload)})
-    if (r.ok) {
-  setForm({ ratings: {} });
-  setRatings({});
-  saveDraftRatings({});
-  setEditingDripId(null);
-  onSaved();
-}
+    if(r.ok){ setForm({ratings:{}}); setEditingDripId(null); onSaved() }
   }
 
   // 表示ヘルパ
@@ -430,43 +382,34 @@ if (!form.brew_date) {
     const notes = cs.map(c => ORIGIN_THEORIES[c] ? `${c}：${ORIGIN_THEORIES[c]}` : '').filter(Boolean)
     return notes.length ? notes.join(' ／ ') : '—'
   }
-  
-  // 5段階（内部は 10 / 8 / 6 / 4 / 2 を保存） ← すべて「文字列」で扱う
-const RATING_OPTIONS5: { value: string; label: string }[] = [
-  { value: '10', label: '5' },
-  { value: '8',  label: '4' },
-  { value: '6',  label: '3' },
-  { value: '4',  label: '2' },
-  { value: '2',  label: '1' },
-];
 
-// 置き換え
+  /** 1–10保存 ↔ 1–5表示 の相互変換 */
+const to5step = (v?: any) =>
+  Number.isFinite(Number(v)) ? Math.min(5, Math.max(1, Math.round(Number(v) / 2))) : '';
+
+const from5step = (v5: string) =>
+  v5 === '' ? '' : String(Number(v5) * 2);
+
+/** 5段階セレクトの共通コンポーネント */
 const RatingSelect = ({
   k, label,
-}: {
-  k: 'overall'|'clean'|'flavor'|'acidity'|'bitterness'|'sweetness'|'body'|'aftertaste';
-  label: string;
-}) => {
-  const val = ratings[k] ?? '';
-  return (
-    <div className="flex flex-col gap-1">
-      <label className="text-xs text-gray-600">{label}</label>
-      <select
-        className="border rounded p-2 text-sm"
-        value={val}
-        onChange={(e)=> handleRating(k, e.target.value)}
-      >
-        <option value="">未選択</option>
-        <option value="10">5 とても良い</option>
-        <option value="8">4 良い</option>
-        <option value="6">3 ふつう</option>
-        <option value="4">2 やや弱い</option>
-        <option value="2">1 弱い</option>
-      </select>
-    </div>
-  );
-};
-  
+}: { k: 'overall'|'clean'|'flavor'|'acidity'|'bitterness'|'sweetness'|'body'|'aftertaste'; label: string }) => (
+  <div className="flex flex-col gap-1">
+    <label className="text-xs text-gray-600">{label}</label>
+    <select
+      className="border rounded p-2 text-sm"
+      value={to5step((form as any).ratings?.[k])}
+      onChange={(e)=> handleRating(k, from5step(e.target.value))}
+    >
+      <option value="">—</option>
+      <option value="1">1（弱い）</option>
+      <option value="2">2</option>
+      <option value="3">3（中）</option>
+      <option value="4">4</option>
+      <option value="5">5（強い）</option>
+    </select>
+  </div>
+);
   // 指標切替
   const yAccessor = useMemo(()=>({
     key: `ratings.${yMetric}`,
@@ -539,8 +482,8 @@ const RatingSelect = ({
         <select className="border rounded p-2" value={form.bean_id||''} onChange={e=>handle('bean_id', e.target.value)} required>
           <option value="">使用豆を選択</option>
           {filteredSortedBeans.map((b:any) => (
-  <option key={b.id} value={String(b.id)}>{beanOptionLabel(b)}</option>
-))}
+            <option key={b.id} value={b.id}>{beanOptionLabel(b)}</option>
+          ))}
         </select>
         <input
   className="border rounded p-2"
@@ -611,23 +554,24 @@ const RatingSelect = ({
         {!isUnknown(selBean?.brew_policy) && (<div>ドリップ方針メモ：{selBean?.brew_policy}</div>)}
 
         {hasAvg && (<div className="text-sm">平均評価（★）：<StarRow avg={beanStats?.avg_overall} /></div>)}
-{/* レーダー：この豆の平均 / 同焙煎度ベスト / 同産地×近焙煎度ベスト */}
-{hasRadar && (
-  <div className="h-56">
-    <ResponsiveContainer>
-      <RadarChart data={radarData}>
-        <PolarGrid />
-        <PolarAngleAxis dataKey="subject" />
-        <PolarRadiusAxis angle={30} domain={[0, 10]} />
-        <Radar name="この豆の平均" dataKey="beanAvg" fillOpacity={0.2} />
-        {bestSameRoast && <Radar name="同焙煎度ベスト" dataKey="sameRoastBest" fillOpacity={0.2} />}
-        {bestOriginNear && <Radar name="産地×近焙煎度ベスト" dataKey="originNearBest" fillOpacity={0.2} />}
-        <Legend />
-        <Tooltip />
-      </RadarChart>
-    </ResponsiveContainer>
-  </div>
-)}
+
+        {/* レーダー：この豆の平均 / 同焙煎度ベスト / 同産地×近焙煎度ベスト */}
+        {hasRadar && (
+          <div className="h-56">
+            <ResponsiveContainer>
+              <RadarChart data={radarData}>
+                <PolarGrid />
+                <PolarAngleAxis dataKey="subject" />
+                <PolarRadiusAxis angle={30} domain={[0, 10]} />
+                <Radar name="この豆の平均" dataKey="beanAvg" fillOpacity={0.2} />
+                {bestSameRoast && <Radar name="同焙煎度ベスト" dataKey="sameRoastBest" fillOpacity={0.2} />}
+                {bestOriginNear && <Radar name="産地×近焙煎度ベスト" dataKey="originNearBest" fillOpacity={0.2} />}
+                <Legend />
+                <Tooltip />
+              </RadarChart>
+            </ResponsiveContainer>
+          </div>
+        )}
 
         {/* 豆ごとバー（抽出方法別平均） */}
         {hasStats && (
@@ -825,7 +769,7 @@ const RatingSelect = ({
 
         <div className="text-sm">
           {(() => {
-            const r = ratings || {}
+            const r = form.ratings || {}
             const nums = Object.entries(r)
               .map(([k,v]: any)=> (v!=='' && v!=null ? Number(v) : null))
               .filter((x:any)=> Number.isFinite(x)) as number[]
@@ -844,22 +788,22 @@ const RatingSelect = ({
 
         <div className="h-44">
           <ResponsiveContainer>
-  <RadarChart data={[
-  {subject:'クリーンさ', value: Number(ratings.clean)      || 0},
-  {subject:'風味',       value: Number(ratings.flavor)     || 0},
-  {subject:'酸味',       value: Number(ratings.acidity)    || 0},
-  {subject:'苦味',       value: Number(ratings.bitterness) || 0},
-  {subject:'甘味',       value: Number(ratings.sweetness)  || 0},
-  {subject:'コク',       value: Number(ratings.body)       || 0},
-  {subject:'後味',       value: Number(ratings.aftertaste) || 0},
-]}>
-    <PolarGrid />
-    <PolarAngleAxis dataKey="subject" />
-    <PolarRadiusAxis angle={30} domain={[0,10]} />
-    <Radar name="now" dataKey="value" fillOpacity={0.3} />
-    <Tooltip />
-  </RadarChart>
-</ResponsiveContainer>
+            <RadarChart data={[
+              {subject:'クリーンさ', value: Number(form.ratings?.clean)||0},
+              {subject:'風味',     value: Number(form.ratings?.flavor)||0},
+              {subject:'酸味',     value: Number(form.ratings?.acidity)||0},
+              {subject:'苦味',     value: Number(form.ratings?.bitterness)||0},
+              {subject:'甘味',     value: Number(form.ratings?.sweetness)||0},
+              {subject:'コク',     value: Number(form.ratings?.body)||0},
+              {subject:'後味',     value: Number(form.ratings?.aftertaste)||0},
+            ]}>
+              <PolarGrid />
+              <PolarAngleAxis dataKey="subject" />
+              <PolarRadiusAxis angle={30} domain={[0,10]} />
+              <Radar name="now" dataKey="value" fillOpacity={0.3} />
+              <Tooltip />
+            </RadarChart>
+          </ResponsiveContainer>
         </div>
 
         <div className="grid sm:grid-cols-3 gap-2 text-xs">
