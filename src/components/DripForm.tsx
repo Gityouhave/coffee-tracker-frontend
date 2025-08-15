@@ -413,34 +413,6 @@ if (!form.brew_date) {
       </div>
     )
   }
-
-  /** 1–10保存 ↔ 1–5表示 の相互変換 */
-const to5step = (v?: any) =>
-  Number.isFinite(Number(v)) ? Math.min(5, Math.max(1, Math.round(Number(v) / 2))) : '';
-
-const from5step = (v5: string) =>
-  v5 === '' ? '' : String(Number(v5) * 2);
-
-/** 5段階セレクトの共通コンポーネント */
-const RatingSelect = ({
-  k, label,
-}: { k: 'overall'|'clean'|'flavor'|'acidity'|'bitterness'|'sweetness'|'body'|'aftertaste'; label: string }) => (
-  <div className="flex flex-col gap-1">
-    <label className="text-xs text-gray-600">{label}</label>
-    <select
-      className="border rounded p-2 text-sm"
-      value={to5step((form as any).ratings?.[k])}
-      onChange={(e)=> handleRating(k, from5step(e.target.value))}
-    >
-      <option value="">—</option>
-      <option value="1">1（弱い）</option>
-      <option value="2">2</option>
-      <option value="3">3（中）</option>
-      <option value="4">4</option>
-      <option value="5">5（強い）</option>
-    </select>
-  </div>
-);
   // 指標切替
   const yAccessor = useMemo(()=>({
     key: `ratings.${yMetric}`,
