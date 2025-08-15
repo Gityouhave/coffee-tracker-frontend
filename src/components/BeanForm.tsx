@@ -224,17 +224,6 @@ try { localStorage.setItem('ct_beans_dirty', String(Date.now())) } catch {}
 const toggleStock = async (b:any)=> {
   await patchBean(b.id, { in_stock: !b.in_stock })
 }
-
-const deleteBean = async (b:any)=>{
-  if(!confirm(`豆「${b.name}」を削除しますか？\n※紐づくドリップがある場合は削除できません`)) return
-  const r = await fetch(`${API}/api/beans/${b.id}`, { method:'DELETE' })
-  if(!r.ok){
-    const msg = await r.json().catch(()=>({error:'削除に失敗'}))
-    alert(msg.error || '削除に失敗')
-  }else{
-    await loadBeans()
-  }
-}
   const clearForm = ()=>{
     setEditingId(null)
     setForm({
@@ -285,6 +274,8 @@ const deleteBean = async (b:any)=>{
       return
     }
     await loadBeans()
+    // 他ページへ“豆データ更新”を通知（storageイベントで拾う）
+try { localStorage.setItem('ct_beans_dirty', String(Date.now())) } catch {}
     onSaved()
     clearForm()
   }
@@ -298,6 +289,9 @@ const deleteBean = async (b:any)=>{
     if(!r.ok){ throw new Error(`HTTP ${r.status}\n${await r.text().catch(()=> '')}`) }
     await loadBeans()
     if(editingId === dangerBean.id) clearForm()
+    try { localStorage.setItem('ct_beans_dirty', String(Date.now())) } catch {}
+// 同一タブ即時反映したい場合
+try { onSaved?.() } catch {}
   }
 
   return (
