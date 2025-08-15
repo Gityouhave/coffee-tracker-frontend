@@ -382,17 +382,18 @@ if (!form.brew_date) {
     const notes = cs.map(c => ORIGIN_THEORIES[c] ? `${c}：${ORIGIN_THEORIES[c]}` : '').filter(Boolean)
     return notes.length ? notes.join(' ／ ') : '—'
   }
-  // --- 5段階評価セレクト（選択肢エラー回避用） ---
+  // ...originTheoryText の直後に↓を置く
+// --- 5段階評価セレクト（選択肢エラー回避用） ---
 const to5step = (v: any) => {
   if (v === '' || v == null) return '';
   const n = Number(v);
   if (!Number.isFinite(n)) return '';
   const five = Math.min(5, Math.max(1, Math.round(n / 2)));
-  return String(five); // ← 常に文字列で返す
+  return String(five); // 常に文字列で返す
 };
 
 const from5step = (v5: string) => (
-  v5 === '' ? '' : String(Math.min(5, Math.max(1, Number(v5))) * 2) // 保存は1–10に戻す
+  v5 === '' ? '' : String(Math.min(5, Math.max(1, Number(v5))) * 2) // 保存は1–10に戻す（文字列）
 );
 
 const RatingSelect = ({
@@ -405,7 +406,7 @@ const RatingSelect = ({
     <label className="text-xs text-gray-600">{label}</label>
     <select
       className="border rounded p-2 text-sm"
-      value={to5step((form as any).ratings?.[k])}   // ← '' | '1'..'5'
+      value={to5step((form as any).ratings?.[k])}   // '' | '1'..'5'
       onChange={(e)=> handleRating(k, from5step(e.target.value))}
     >
       <option value="">—</option>
@@ -417,7 +418,6 @@ const RatingSelect = ({
     </select>
   </div>
 );
-
   // 指標切替
   const yAccessor = useMemo(()=>({
     key: `ratings.${yMetric}`,
