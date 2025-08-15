@@ -6,8 +6,9 @@ import {
   ScatterChart, Scatter
 } from 'recharts'
 
-/** 焙煎度リスト（並び順用） */
-const ROASTS = ['ライト','シナモン','ミディアム','ハイ','シティ','フルシティ','フレンチ','イタリアン'] as const
+import { filterSortBeans, beanOptionLabel, ROASTS, ROAST_SYMBOLS } from '../utils/beanFilters'
+import { ORIGINS } from '../constants/origins'
+import { ORIGIN_THEORIES } from '../constants/originTheories'
 
 /** 焙煎度→推奨湯温（℃） */
 const ROAST_TEMP: Record<string, number> = {
@@ -100,70 +101,32 @@ export function DripForm({API, beans, onSaved}:{API:string; beans:any[]; onSaved
   const handle = (k:string,v:any)=> setForm((s:any)=> ({...s,[k]:v}))
   const handleRating = (k:string,v:any)=> setForm((s:any)=> ({...s, ratings:{...s.ratings, [k]:v}}))
 
-  // -------- ここから：豆選択の並び替え（BeanForm と同等） --------
-  type SortKey =
-    | 'stock_name'         // 在庫優先 → 名前
-    | 'name'               // 名前順
-    | 'roast_asc'          // 焙煎度 浅→深
-    | 'roast_desc'         // 焙煎度 深→浅
-    | 'roast_date_desc'    // 焙煎日 新→旧
-    | 'roast_date_asc'     // 焙煎日 旧→新
+// 統一フィルタ＆ソート（検索・在庫・産地・ソート）—— 永続化キー共通化
+type SortKey = 'roast_date' | 'roast_level' | 'ppg' | 'name'
+type StockFilter = 'all' | 'in' | 'out'
 
-  const [sortKey, setSortKey] = useState<SortKey>(() => {
-    const saved = localStorage.getItem('ct_sort_beans_for_drip') as SortKey | null
-    return saved || 'stock_name'
-  })
-  const [query, setQuery] = useState('')
-  const [onlyStock, setOnlyStock] = useState(false)
+const LS = {
+  q: 'ct_beans_q',
+  stock: 'ct_beans_stock',
+  origins: 'ct_beans_origins',
+  sort: 'ct_beans_sort',
+}
 
-  useEffect(()=>{ localStorage.setItem('ct_sort_beans_for_drip', sortKey) },[sortKey])
+const [q, setQ] = useState<string>(() => localStorage.getItem(LS.q) || '')
+const [stock, setStock] = useState<StockFilter>(() => (localStorage.getItem(LS.stock) as StockFilter) || 'all')
+const [originFilter, setOriginFilter] = useState<string[]>(() => {
+  try{ return JSON.parse(localStorage.getItem(LS.origins) || '[]') }catch{ return [] }
+})
+const [sort, setSort] = useState<SortKey>(() => (localStorage.getItem(LS.sort) as SortKey) || 'roast_date')
 
-  const roastIndex = (lvl: string) => {
-    const i = ROASTS.indexOf(lvl as any)
-    return i >= 0 ? i : ROASTS.indexOf('シティ')
-  }
-  const nameKey = (s: string) => (s || '').toLocaleLowerCase()
-  const parsedDate = (iso?: string | null) => {
-    if (!iso) return null
-    const t = Date.parse(iso)
-    return Number.isFinite(t) ? t : null
-  }
+useEffect(()=>{ localStorage.setItem(LS.q, q) },[q])
+useEffect(()=>{ localStorage.setItem(LS.stock, stock) },[stock])
+useEffect(()=>{ localStorage.setItem(LS.origins, JSON.stringify(originFilter)) },[originFilter])
+useEffect(()=>{ localStorage.setItem(LS.sort, sort) },[sort])
 
-  const filteredSortedBeans = useMemo(()=>{
-    let list = beans as any[]
-
-    if (onlyStock) list = list.filter(b=> !!b.in_stock)
-    if (query.trim()) {
-      const q = query.trim().toLowerCase()
-      list = list.filter(b =>
-        (b.name || '').toLowerCase().includes(q) ||
-        (b.origin || '').toLowerCase().includes(q)
-      )
-    }
-
-    const byName = (a:any,b:any)=> nameKey(a.name).localeCompare(nameKey(b.name), 'ja')
-    const byRoastAsc = (a:any,b:any)=> roastIndex(a.roast_level) - roastIndex(b.roast_level)
-    const byRoastDesc = (a:any,b:any)=> roastIndex(b.roast_level) - roastIndex(a.roast_level)
-    const byRoastDateDesc = (a:any,b:any)=> (parsedDate(b.roast_date) ?? -Infinity) - (parsedDate(a.roast_date) ?? -Infinity)
-    const byRoastDateAsc  = (a:any,b:any)=> (parsedDate(a.roast_date) ??  Infinity) - (parsedDate(b.roast_date) ??  Infinity)
-    const stockFirst = (a:any,b:any)=> {
-      const sa = a.in_stock ? 0 : 1
-      const sb = b.in_stock ? 0 : 1
-      if (sa !== sb) return sa - sb
-      return byName(a,b)
-    }
-
-    const cmp =
-      sortKey === 'stock_name' ? stockFirst :
-      sortKey === 'name' ? byName :
-      sortKey === 'roast_asc' ? byRoastAsc :
-      sortKey === 'roast_desc' ? byRoastDesc :
-      sortKey === 'roast_date_desc' ? byRoastDateDesc :
-      byRoastDateAsc
-
-    return [...list].sort(cmp)
-  },[beans, onlyStock, query, sortKey])
-  // -------- ここまで：豆選択の並び替え --------
+const filteredSortedBeans = useMemo(()=>{
+  return filterSortBeans(beans, { q, stock, origins: originFilter, sort })
+},[beans, q, stock, originFilter, sort])
 
   // セオリー/推奨/挽き目表記（brew_date 変更でも aging を再計算させたいので依存に含める）
   useEffect(()=>{
@@ -302,6 +265,13 @@ const timeDelta = (actSec!=null && recTime!=null) ? (actSec - recTime) : null
     const base = parts.join('・')
     return b.roast_level ? `${base}（${b.roast_level}）` : base
   }
+  // ブレンド対応の産地セオリー文字列を生成（deriveが単一国しか返さない場合に備えフロントで補正）
+const originTheoryText = ()=>{
+  if(!selBean?.origin) return '—'
+  const cs = String(selBean.origin).split(',').map(s=>s.trim()).filter(Boolean)
+  const notes = cs.map(c => ORIGIN_THEORIES[c] ? `${c}：${ORIGIN_THEORIES[c]}` : '').filter(Boolean)
+  return notes.length ? notes.join(' ／ ') : '—'
+}
   const theoryWithValue = (theory:string|undefined|null, value:string|undefined|null)=>{
     if(!selBean) return '--'
     if(value && theory) return `${value}（${theory}）`
@@ -335,27 +305,42 @@ const timeDelta = (actSec!=null && recTime!=null) ? (actSec - recTime) : null
 
   return (
     <form onSubmit={submit} className="space-y-4">
-      {/* ソート・絞り込み（BeanForm と同等） */}
-      <div className="flex flex-col sm:flex-row gap-2">
-        <div className="flex items-center gap-2">
-          <label className="text-sm text-gray-600">豆のソート</label>
-          <select className="border rounded p-2 text-sm" value={sortKey} onChange={e=>setSortKey(e.target.value as SortKey)}>
-            <option value="stock_name">在庫優先 → 名前</option>
-            <option value="name">名前（A→Z / あ→ん）</option>
-            <option value="roast_asc">焙煎度（浅→深）</option>
-            <option value="roast_desc">焙煎度（深→浅）</option>
-            <option value="roast_date_desc">焙煎日（新→旧）</option>
-            <option value="roast_date_asc">焙煎日（旧→新）</option>
-          </select>
-        </div>
-        <div className="flex items-center gap-2">
-          <input className="border rounded p-2 text-sm w-44" placeholder="検索（名前・産地）" value={query} onChange={e=>setQuery(e.target.value)} />
-          <label className="inline-flex items-center gap-1 text-sm">
-            <input type="checkbox" checked={onlyStock} onChange={e=> setOnlyStock(e.target.checked)} />
-            在庫のみ
-          </label>
-        </div>
-      </div>
+      {/* ソート・絞り込み（統一仕様） */}
+<div className="flex flex-col gap-2 sm:flex-row sm:items-end">
+  <div className="flex-1">
+    <label className="block text-xs text-gray-600">フリーワード検索</label>
+    <input className="border rounded p-2 w-full text-sm" placeholder="名前・産地・品種・精製など"
+           value={q} onChange={e=>setQ(e.target.value)} />
+  </div>
+  <div>
+    <label className="block text-xs text-gray-600">在庫</label>
+    <select className="border rounded p-2 text-sm" value={stock} onChange={e=>setStock(e.target.value as any)}>
+      <option value="all">全部</option>
+      <option value="in">あり</option>
+      <option value="out">なし</option>
+    </select>
+  </div>
+  <div className="min-w-[220px]">
+    <label className="block text-xs text-gray-600">産地フィルタ（複数可）</label>
+    <select multiple className="border rounded p-2 text-sm w-full h-24"
+            value={originFilter}
+            onChange={e=>{
+              const v = Array.from(e.target.selectedOptions).map(o=>o.value)
+              setOriginFilter(v)
+            }}>
+      {ORIGINS.map(o=> <option key={o} value={o}>{o}</option>)}
+    </select>
+  </div>
+  <div>
+    <label className="block text-xs text-gray-600">ソート（昇順）</label>
+    <select className="border rounded p-2 text-sm" value={sort} onChange={e=>setSort(e.target.value as any)}>
+      <option value="roast_date">焙煎日</option>
+      <option value="roast_level">焙煎度</option>
+      <option value="ppg">g単価</option>
+      <option value="name">名前</option>
+    </select>
+  </div>
+</div>
 
       {/* 1列目：豆＆日付（並び替え済みの候補を使用） */}
       <div className="grid grid-cols-2 gap-2">
@@ -363,8 +348,8 @@ const timeDelta = (actSec!=null && recTime!=null) ? (actSec - recTime) : null
           <option value="">使用豆を選択</option>
           {filteredSortedBeans.map((b:any) => (
             <option key={b.id} value={b.id}>
-              {b.in_stock ? '🟢' : '⚪️'} {optionLabel(b)}{b.roast_date ? ` / ${b.roast_date}` : ''}
-            </option>
+  {beanOptionLabel(b)}
+</option>
           ))}
         </select>
         <input className="border rounded p-2" type="date" value={form.brew_date||''} onChange={e=>handle('brew_date',e.target.value)} required />
@@ -406,10 +391,11 @@ const timeDelta = (actSec!=null && recTime!=null) ? (actSec - recTime) : null
       {/* セレクト直下：豆セオリー＋豆ごと統計 */}
       <div className="bg-gray-50 border rounded p-2 space-y-2 text-sm">
         <div className="font-semibold">選択豆：{selBean?.name ?? '--'}</div>
-        <div>産地セオリー：{ showOrDash(!!form.bean_id, theoryWithValue(derive?.theory?.origin, selBean?.origin)) }</div>
+        <div>産地セオリー：{ showOrDash(!!form.bean_id, originTheoryText()) }</div>
         <div>精製セオリー：{ showOrDash(!!form.bean_id, theoryWithValue(derive?.theory?.process, selBean?.process)) }</div>
         <div>追加処理セオリー：{ showOrDash(!!form.bean_id, theoryWithValue(derive?.theory?.addl_process, selBean?.addl_process)) }</div>
-
+        <div>テイストメモ：{ selBean?.taste_memo ? selBean.taste_memo : '—' }</div>
+<div>ドリップ方針メモ：{ selBean?.brew_policy ? selBean.brew_policy : '—' }</div>
         <div className="text-sm">平均評価（★）：<StarRow avg={beanStats?.avg_overall} /></div>
 
         {/* レーダー */}
