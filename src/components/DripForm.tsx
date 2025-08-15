@@ -76,6 +76,26 @@ export function DripForm({API, beans, onSaved}:{API:string; beans:any[]; onSaved
   const [radarData, setRadarData] = useState<any[]>([])
   const [yMetric, setYMetric] = useState<'overall'|'clean'|'flavor'|'body'>('overall')
   const [editingDripId, setEditingDripId] = useState<number|null>(null)
+    // 前回ドリップ（同一豆の最新1件）
+  const [last, setLast] = useState<any|null>(null)
+
+  // 前回値をフォームに流し込む（空欄だけ上書き）
+  const applyLast = () => {
+    if (!last) return
+    const f = (v:any)=> (v===undefined || v===null || v==='' ? undefined : v)
+    setForm((s:any)=> ({
+      ...s,
+      grind:        s.grind        ?? f(last.grind),
+      water_temp_c: s.water_temp_c ?? f(last.water_temp_c),
+      dose_g:       s.dose_g       ?? f(last.dose_g),
+      water_g:      s.water_g      ?? f(last.water_g),
+      drawdown_g:   s.drawdown_g   ?? f(last.drawdown_g),
+      time:         s.time         ?? (last.time_sec!=null
+                        ? `${Math.floor(last.time_sec/60)}:${String(last.time_sec%60).padStart(2,'0')}` : undefined),
+      dripper:      s.dripper      ?? f(last.dripper),
+      storage:      s.storage      ?? f(last.storage),
+    }))
+  }
 
   const handle = (k:string,v:any)=> setForm((s:any)=> ({...s,[k]:v}))
   const handleRating = (k:string,v:any)=> setForm((s:any)=> ({...s, ratings:{...s.ratings, [k]:v}}))
@@ -165,6 +185,14 @@ export function DripForm({API, beans, onSaved}:{API:string; beans:any[]; onSaved
     if(!form.bean_id){ setBeanStats(null); return }
     fetch(`${API}/api/stats?scope=bean&bean_id=${form.bean_id}`).then(r=>r.json()).then(setBeanStats)
   },[form.bean_id, API])
+    // 同一豆の最新ドリップを1件取得（プリセット用）
+  useEffect(()=>{
+    if(!form.bean_id){ setLast(null); return }
+    fetch(`${API}/api/drips/last?bean_id=${form.bean_id}`)
+      .then(r=>r.json())
+      .then(setLast)
+      .catch(()=> setLast(null))
+  },[form.bean_id, API])
 
   // 豆ごとのドリップ取得→レーダー＆相関用の差分を作る
   useEffect(()=>{
@@ -191,15 +219,19 @@ export function DripForm({API, beans, onSaved}:{API:string; beans:any[]; onSaved
       setRadarData(rd)
 
       const withDeltas = mine.map((d:any)=>{
-        const roast = d.bean?.roast_level ?? d.roast_level ?? 'シティ'
-        const recTemp = ROAST_TEMP[roast] ?? 82.5
-        const tempDelta = (typeof d.water_temp_c === 'number') ? (d.water_temp_c - recTemp) : null
+        // 推奨湯温はサーバが返す recommended.temp_c を最優先、なければクライアント側表でフォールバック
+const roast = d.roast_level ?? 'シティ'
+const recTemp = (d.derived?.recommended?.temp_c as number | undefined) ?? (ROAST_TEMP[roast] ?? 82.5)
+const tempDelta = (typeof d.water_temp_c === 'number' && Number.isFinite(recTemp)) ? (d.water_temp_c - recTemp) : null
 
-        const label20 = d.derive?.grind?.label20 || d.label20 || null
-        const group = toGrindGroup(label20)
-        const recTime = group ? GRIND_TIME[group] : null
-        const actSec = toSec(d.time)
-        const timeDelta = (actSec!=null && recTime!=null) ? (actSec - recTime) : null
+// 推奨時間は20段階ラベル→グループで算出（サーバ推奨が必要なら derive API を別途使う）
+const label20 = d.derive?.grind?.label20 || d.label20 || null
+const group = toGrindGroup(label20)
+const recTime = group ? GRIND_TIME[group] : null
+
+// 実測は mm:ss ではなく API が返す time_sec を使う
+const actSec = (typeof d.time_sec === 'number') ? d.time_sec : null
+const timeDelta = (actSec!=null && recTime!=null) ? (actSec - recTime) : null
 
         return { ...d, _deltas: { temp_delta: tempDelta, time_delta: timeDelta } }
       })
@@ -337,6 +369,22 @@ export function DripForm({API, beans, onSaved}:{API:string; beans:any[]; onSaved
         </select>
         <input className="border rounded p-2" type="date" value={form.brew_date||''} onChange={e=>handle('brew_date',e.target.value)} required />
       </div>
+
+            {last && (
+        <div className="text-xs flex items-center gap-2">
+          <span className="text-gray-600">
+            前回（{last.brew_date} / {last.dripper ?? '—'}）：挽き{last.grind ?? '—'}・湯温{last.water_temp_c ?? '—'}℃
+            ・豆{last.dose_g ?? '—'}g・湯量{last.water_g ?? '—'}g・時間{last.time_sec!=null ? `${Math.floor(last.time_sec/60)}:${String(last.time_sec%60).padStart(2,'0')}` : '—'}
+          </span>
+          <button
+            type="button"
+            onClick={applyLast}
+            className="px-2 py-1 rounded border bg-white hover:bg-gray-50"
+          >
+            前回値を適用
+          </button>
+        </div>
+      )}
 
       {/* エイジング日数 */}
       <div className="text-xs text-gray-700">
@@ -482,7 +530,7 @@ export function DripForm({API, beans, onSaved}:{API:string; beans:any[]; onSaved
           <input className="border rounded p-2 w-full" placeholder="豆 (g)" value={form.dose_g||''} onChange={e=>handle('dose_g',e.target.value)} />
           <div className="text-xs text-gray-600 mt-1">推奨レシオ：{showOrDash(!!form.bean_id, derive?.ratio?.recommended_ratio)}倍</div>
           <div className="text-[11px] text-gray-500">最大推奨量：{showOrDash(!!form.bean_id, derive?.dose?.max_recommended_g)}</div>
-          <div className="text:[11px] text-gray-600 mt-1">
+          <div className="text-[11px] text-gray-600 mt-1">
             {(() => {
               const b = beans.find(b => String(b.id) === String(form.bean_id));
               const price = Number(b?.price_yen), weight = Number(b?.weight_g), dose = Number(form.dose_g);
