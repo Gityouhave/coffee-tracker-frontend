@@ -250,6 +250,30 @@ const timeDelta = (actSec!=null && recTime!=null) ? (actSec - recTime) : null
   // 表示ヘルパ
   const selBean = beans.find(b=> String(b.id)===String(form.bean_id))
   const showOrDash = (cond:any, val:any, dashWhenBean?:string)=> cond ? (val ?? '—') : (dashWhenBean ?? '--')
+  // 不明判定
+const isUnknown = (v?: any) => {
+  const s = String(v ?? '').trim()
+  return !s || s === '—' || s === '-' || s === '不明' || s.startsWith('不明')
+}
+
+// 値＋セオリーを結合。どちらか不明なら省く。両方不明なら '' を返す。
+const theoryWithValue = (theory?: any, value?: any) => {
+  const t = isUnknown(theory) ? '' : String(theory)
+  const v = isUnknown(value) ? '' : String(value)
+  if (v && t) return `${v}（${t}）`
+  if (v) return v
+  if (t) return t
+  return ''
+}
+
+// 行描画ヘルパ（テキストが空なら null で行ごと消す）
+const TheoryRow = ({
+  label, theory, value, show = true,
+}: {label:string; theory:any; value:any; show?:boolean}) => {
+  if (!show) return null
+  const txt = theoryWithValue(theory, value)
+  return txt ? <div>{label}：{txt}</div> : null
+}
   const StarRow = ({avg}:{avg:number|undefined})=>{
     if (avg == null || isNaN(Number(avg))) return <span>--</span>
     const s = Math.round(Number(avg)/2)
@@ -272,12 +296,6 @@ const originTheoryText = ()=>{
   const notes = cs.map(c => ORIGIN_THEORIES[c] ? `${c}：${ORIGIN_THEORIES[c]}` : '').filter(Boolean)
   return notes.length ? notes.join(' ／ ') : '—'
 }
-  const theoryWithValue = (theory:string|undefined|null, value:string|undefined|null)=>{
-    if(!selBean) return '--'
-    if(value && theory) return `${value}（${theory}）`
-    if(value && !theory) return `${value}（—）`
-    return '—'
-  }
 
   // 指標切替
   const yAccessor = useMemo(()=>({
@@ -302,6 +320,13 @@ const originTheoryText = ()=>{
   const rTimeBean = useMemo(()=> {
     const v = corr(beanPairsTime); return (v==null? null : Math.round(v*100)/100)
   },[beanPairsTime])
+   // ---- 表示条件フラグ ----
+const hasStats = !!(beanStats && Number(beanStats.count) > 0)
+const hasAvg = !!(hasStats && beanStats.avg_overall != null)
+const hasByMethod = !!(hasStats && Array.isArray(beanStats.by_method) && beanStats.by_method.length > 0)
+const hasRadar = !!(Array.isArray(radarData) && radarData.some(d => Number(d.value) > 0))
+const hasPairsTemp = (beanPairsTemp.length > 0)
+const hasPairsTime = (beanPairsTime.length > 0)
 
   return (
     <form onSubmit={submit} className="space-y-4">
@@ -391,43 +416,71 @@ const originTheoryText = ()=>{
       {/* セレクト直下：豆セオリー＋豆ごと統計 */}
       <div className="bg-gray-50 border rounded p-2 space-y-2 text-sm">
         <div className="font-semibold">選択豆：{selBean?.name ?? '--'}</div>
-        <div>産地セオリー：{ showOrDash(!!form.bean_id, originTheoryText()) }</div>
-        <div>精製セオリー：{ showOrDash(!!form.bean_id, theoryWithValue(derive?.theory?.process, selBean?.process)) }</div>
-        <div>追加処理セオリー：{ showOrDash(!!form.bean_id, theoryWithValue(derive?.theory?.addl_process, selBean?.addl_process)) }</div>
-        <div>テイストメモ：{ selBean?.taste_memo ? selBean.taste_memo : '—' }</div>
-<div>ドリップ方針メモ：{ selBean?.brew_policy ? selBean.brew_policy : '—' }</div>
-        <div className="text-sm">平均評価（★）：<StarRow avg={beanStats?.avg_overall} /></div>
+
+{/* 不明/—/空 は行ごと非表示 */}
+<TheoryRow
+  label="産地セオリー"
+  theory={originTheoryText()}
+  value={selBean?.origin}
+  show={!!form.bean_id}
+/>
+<TheoryRow
+  label="精製セオリー"
+  theory={derive?.theory?.process}
+  value={selBean?.process}
+  show={!!form.bean_id}
+/>
+<TheoryRow
+  label="追加処理セオリー"
+  theory={derive?.theory?.addl_process}
+  value={selBean?.addl_process}
+  show={!!form.bean_id}
+/>
+
+{!isUnknown(selBean?.taste_memo) && (
+  <div>テイストメモ：{selBean?.taste_memo}</div>
+)}
+{!isUnknown(selBean?.brew_policy) && (
+  <div>ドリップ方針メモ：{selBean?.brew_policy}</div>
+)}
+        {hasAvg && (   <div className="text-sm">平均評価（★）：<StarRow avg={beanStats?.avg_overall} /></div> )}
 
         {/* レーダー */}
-        <div className="h-48">
-          <ResponsiveContainer>
-            <RadarChart data={radarData}>
-              <PolarGrid />
-              <PolarAngleAxis dataKey="subject" />
-              <PolarRadiusAxis angle={30} domain={[0, 10]} />
-              <Radar name="avg" dataKey="value" stroke="" fill="" fillOpacity={0.3} />
-              <Tooltip />
-            </RadarChart>
-          </ResponsiveContainer>
-        </div>
+        {hasRadar && (
+  <div className="h-48">
+    <ResponsiveContainer>
+      <RadarChart data={radarData}>
+        <PolarGrid />
+        <PolarAngleAxis dataKey="subject" />
+        <PolarRadiusAxis angle={30} domain={[0, 10]} />
+        <Radar name="avg" dataKey="value" stroke="" fill="" fillOpacity={0.3} />
+        <Tooltip />
+      </RadarChart>
+    </ResponsiveContainer>
+  </div>
+)}
 
         {/* 豆ごとバー（抽出方法別平均） */}
-        <div className="text-xs">記録数：{beanStats?.count ?? (form.bean_id ? '—' : '--')}　
-          平均：{beanStats?.avg_overall ?? (form.bean_id ? '—' : '--')}　
-          最高：{beanStats?.max_overall ?? (form.bean_id ? '—' : '--')}
-        </div>
-        <div className="h-40">
-          <ResponsiveContainer>
-            <BarChart data={beanStats?.by_method ?? []}>
-              <CartesianGrid strokeDasharray="3 3" />
-              <XAxis dataKey="dripper" />
-              <YAxis />
-              <Tooltip />
-              <Legend />
-              <Bar dataKey="avg_overall" />
-            </BarChart>
-          </ResponsiveContainer>
-        </div>
+        {hasStats && (
+  <div className="text-xs">
+    記録数：{beanStats.count}　平均：{beanStats.avg_overall}　最高：{beanStats.max_overall}
+  </div>
+)}
+
+{hasByMethod && (
+  <div className="h-40">
+    <ResponsiveContainer>
+      <BarChart data={beanStats.by_method}>
+        <CartesianGrid strokeDasharray="3 3" />
+        <XAxis dataKey="dripper" />
+        <YAxis />
+        <Tooltip />
+        <Legend />
+        <Bar dataKey="avg_overall" />
+      </BarChart>
+    </ResponsiveContainer>
+  </div>
+)}
 
         {/* 豆ごと相関：湯温差 / 時間差 */}
         <div className="flex items-center gap-2 text-xs">
@@ -442,41 +495,48 @@ const originTheoryText = ()=>{
 
         {/* 湯温差 vs 指標 */}
         <div>
-          <div className="font-semibold mb-1">
-            湯温差（実測−推奨） vs {yAccessor.label}
-            <span className="ml-2 text-xs text-gray-500">r={rTempBean ?? '—'}</span>
-          </div>
-          <div className="h-44">
-            <ResponsiveContainer>
-              <ScatterChart>
-                <CartesianGrid />
-                <XAxis dataKey="_deltas.temp_delta" name="tempΔ(°C)" />
-                <YAxis dataKey={yAccessor.key} name={yAccessor.label} />
-                <Tooltip />
-                <Scatter name="drips" data={beanDrips} />
-              </ScatterChart>
-            </ResponsiveContainer>
-          </div>
+          {hasPairsTemp && (
+  <div>
+    <div className="font-semibold mb-1">
+      湯温差（実測−推奨） vs {yAccessor.label}
+      <span className="ml-2 text-xs text-gray-500">r={rTempBean ?? '—'}</span>
+    </div>
+    <div className="h-44">
+      <ResponsiveContainer>
+        <ScatterChart>
+          <CartesianGrid />
+          <XAxis dataKey="_deltas.temp_delta" name="tempΔ(°C)" />
+          <YAxis dataKey={yAccessor.key} name={yAccessor.label} />
+          <Tooltip />
+          <Scatter name="drips" data={beanDrips} />
+        </ScatterChart>
+      </ResponsiveContainer>
+    </div>
+  </div>
+)}
         </div>
 
         {/* 時間差 vs 指標 */}
         <div>
-          <div className="font-semibold mb-1">
-            時間差（実測秒−推奨秒） vs {yAccessor.label}
-            <span className="ml-2 text-xs text-gray-500">r={rTimeBean ?? '—'}</span>
-          </div>
-          <div className="h-44">
-            <ResponsiveContainer>
-              <ScatterChart>
-                <CartesianGrid />
-                <XAxis dataKey="_deltas.time_delta" name="timeΔ(s)" />
-                <YAxis dataKey={yAccessor.key} name={yAccessor.label} />
-                <Tooltip />
-                <Scatter name="drips" data={beanDrips} />
-              </ScatterChart>
-            </ResponsiveContainer>
-          </div>
-        </div>
+          {hasPairsTime && (
+  <div>
+    <div className="font-semibold mb-1">
+      時間差（実測秒−推奨秒） vs {yAccessor.label}
+      <span className="ml-2 text-xs text-gray-500">r={rTimeBean ?? '—'}</span>
+    </div>
+    <div className="h-44">
+      <ResponsiveContainer>
+        <ScatterChart>
+          <CartesianGrid />
+          <XAxis dataKey="_deltas.time_delta" name="timeΔ(s)" />
+          <YAxis dataKey={yAccessor.key} name={yAccessor.label} />
+          <Tooltip />
+          <Scatter name="drips" data={beanDrips} />
+        </ScatterChart>
+      </ResponsiveContainer>
+    </div>
+  </div>
+)}
       </div>
 
       {/* 入力群：各入力直下に推奨/差分 */}
