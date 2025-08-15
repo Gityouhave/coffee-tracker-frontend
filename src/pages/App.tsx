@@ -1,11 +1,11 @@
 // src/pages/App.tsx
 import React, { useEffect, useState } from 'react'
-import DripList from '../components/DripList'          // ← ここをデフォルトインポートに変更
+import Tabs from '../components/Tabs'
+import DripList from '../components/DripList'          // default export
 import { BeanForm } from '../components/BeanForm'
 import { DripForm } from '../components/DripForm'
 import MissingOrigins from '../components/MissingOrigins'
 
-// API は一度だけ決定（VITE_BACKEND_URL → VITE_API → ローカル）
 const API =
   (import.meta as any).env?.VITE_BACKEND_URL ||
   (import.meta as any).env?.VITE_API ||
@@ -38,63 +38,92 @@ export default function App() {
     fetchStats()
   }, [])
 
+  const dashHeader = (
+    <header className="flex items-baseline justify-between">
+      <h1 className="text-2xl font-bold">Coffee Tracker ☕</h1>
+      <span className="text-xs text-gray-500">
+        Backend: <code>{API}</code>
+      </span>
+    </header>
+  )
+
   return (
-    <main className="mx-auto max-w-5xl p-4 space-y-6">
-      <header className="flex items-baseline justify-between">
-        <h1 className="text-2xl font-bold">Coffee Tracker ☕</h1>
-        <span className="text-sm text-gray-500">
-          Backend: <code>{API}</code>
-        </span>
-      </header>
+    <main className="mx-auto max-w-6xl p-4 space-y-4">
+      {dashHeader}
 
-      {/* 1) 豆フォーム + 欠落産地 */}
-      <section className="grid lg:grid-cols-2 gap-6">
-        <div className="p-4 bg-white rounded-2xl shadow">
-          <h2 className="font-semibold mb-2">1) コーヒー豆</h2>
-          <BeanForm API={API} onSaved={fetchBeans} />
-          <div className="mt-3">
-            <MissingOrigins API={API} />
-          </div>
-        </div>
+      <Tabs
+        storageKey="ct_last_tab"
+        tabs={[
+          {
+            id: 'beans',
+            label: '豆 管理',
+            content: (
+              <div className="grid lg:grid-cols-2 gap-6">
+                <section className="p-4 bg-white rounded-2xl shadow">
+                  <h2 className="font-semibold mb-2">1) コーヒー豆を登録・編集</h2>
+                  <BeanForm API={API} onSaved={fetchBeans} />
+                </section>
 
-        {/* 2) ドリップ記録 */}
-        <div className="p-4 bg-white rounded-2xl shadow">
-          <h2 className="font-semibold mb-2">2) ドリップ記録</h2>
-          <DripForm
-            API={API}
-            beans={beans}
-            onSaved={() => {
-              fetchDrips()
-              fetchStats()
-            }}
-          />
-          <div className="mt-3 text-sm text-gray-600">記録数：{drips.length}</div>
-        </div>
-      </section>
-
-      {/* 3) 簡易統計 */}
-      <section className="p-4 bg-white rounded-2xl shadow">
-        <h3 className="font-semibold mb-2">3) 統計（全体）</h3>
-        {stats ? (
-          <div className="text-sm">
-            平均評価：{stats.avg_overall ?? '—'}（n={stats.count ?? 0}）
-          </div>
-        ) : (
-          <div className="text-sm text-gray-400">データがありません</div>
-        )}
-      </section>
-
-      {/* 4) 最近のドリップ履歴（編集・削除） */}
-      <section className="p-4 bg-white rounded-2xl shadow">
-        <h3 className="font-semibold mb-2">最近のドリップ履歴（編集・削除）</h3>
-        <DripList
-          API={API}
-          onChanged={() => {
-            fetchDrips()
-            fetchStats()
-          }}
-        />
-      </section>
+                <section className="p-4 bg-white rounded-2xl shadow">
+                  <h3 className="font-semibold mb-2">欠落産地（在庫基準）</h3>
+                  <MissingOrigins API={API} />
+                </section>
+              </div>
+            ),
+          },
+          {
+            id: 'drip',
+            label: 'ドリップ記録',
+            content: (
+              <section className="p-4 bg-white rounded-2xl shadow">
+                <h2 className="font-semibold mb-2">2) ドリップを記録</h2>
+                <DripForm
+                  API={API}
+                  beans={beans}
+                  onSaved={() => {
+                    fetchDrips()
+                    fetchStats()
+                  }}
+                />
+              </section>
+            ),
+          },
+          {
+            id: 'history',
+            label: '履歴',
+            badge: drips?.length ?? 0,
+            content: (
+              <section className="p-4 bg-white rounded-2xl shadow">
+                <h3 className="font-semibold mb-2">最近のドリップ履歴（編集・削除）</h3>
+                <DripList
+                  API={API}
+                  onChanged={() => {
+                    fetchDrips()
+                    fetchStats()
+                  }}
+                />
+              </section>
+            ),
+          },
+          {
+            id: 'stats',
+            label: '統計',
+            content: (
+              <section className="p-4 bg-white rounded-2xl shadow space-y-3">
+                <h3 className="font-semibold">3) 統計（全体）</h3>
+                {stats ? (
+                  <div className="text-sm">
+                    平均評価：{stats.avg_overall ?? '—'}（n={stats.count ?? 0}）
+                  </div>
+                ) : (
+                  <div className="text-sm text-gray-400">データがありません</div>
+                )}
+                {/* ここに既存の散布図・レーダー等のチャートを配置してOK */}
+              </section>
+            ),
+          },
+        ]}
+      />
     </main>
   )
 }
