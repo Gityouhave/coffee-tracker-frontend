@@ -148,6 +148,21 @@ export function BeanForm({API, onSaved}:{API:string; onSaved:()=>void}){
     taste_memo:'', brew_policy:''
   })
   const [beans, setBeans] = useState<Bean[]>([])
+  // 一時的な焙煎日入力値（行の並び替えでの“行移動”中に別の豆へ値が乗り移るのを防ぐ）
+const [tempDates, setTempDates] = useState<Record<number, string>>({})
+const handleTempDateChange = (id:number, v:string)=>{
+  setTempDates(s=> ({...s, [id]: v}))
+}
+const commitRoastDate = async (b:Bean)=>{
+  const iso = (tempDates[b.id] ?? b.roast_date ?? '').trim()
+  // 空にしたら null 送る
+  await patchBean(b.id, { roast_date: iso || null })
+  // 反映後は一時値を消す
+  setTempDates(s=> {
+    const { [b.id]:_, ...rest } = s
+    return rest
+  })
+}
   type SortKey = 'roast_date' | 'roast_level' | 'ppg' | 'name'
 type StockFilter = 'all' | 'in' | 'out'
 const LS = { q:'ct_beans_q', stock:'ct_beans_stock', origins:'ct_beans_origins', sort:'ct_beans_sort' }
@@ -202,14 +217,14 @@ const filteredBeans = React.useMemo(()=>{
     body: JSON.stringify(body)
   })
   await loadBeans()
+    // 他ページへ“豆データ更新”を通知（storageイベントで拾う）
+try { localStorage.setItem('ct_beans_dirty', String(Date.now())) } catch {}
 }
 
 const toggleStock = async (b:any)=> {
   await patchBean(b.id, { in_stock: !b.in_stock })
 }
-const updateRoastDate = async (b:any, iso:string)=> {
-  await patchBean(b.id, { roast_date: iso || null })
-}
+
 const deleteBean = async (b:any)=>{
   if(!confirm(`豆「${b.name}」を削除しますか？\n※紐づくドリップがある場合は削除できません`)) return
   const r = await fetch(`${API}/api/beans/${b.id}`, { method:'DELETE' })
@@ -418,12 +433,13 @@ const deleteBean = async (b:any)=>{
   </label>
 
   <input
-    type="date"
-    className="border rounded p-1 text-xs"
-    value={b.roast_date || ''}
-    onChange={e=>updateRoastDate(b, e.target.value)}
-    title="焙煎日を直接編集"
-  />
+  type="date"
+  className="border rounded p-1 text-xs"
+  value={tempDates[b.id] ?? (b.roast_date || '')}
+  onChange={e=>handleTempDateChange(b.id, e.target.value)}
+  onBlur={()=>commitRoastDate(b)}
+  title="焙煎日を直接編集"
+/>
 
   <button className="rounded border px-2 py-1" onClick={()=>startEdit(b)}>編集</button>
   <button
