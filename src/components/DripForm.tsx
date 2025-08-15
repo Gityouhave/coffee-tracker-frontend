@@ -6,7 +6,7 @@ import {
   ScatterChart, Scatter
 } from 'recharts'
 
-import { filterSortBeans, beanOptionLabel, ROASTS, ROAST_SYMBOLS } from '../utils/beanFilters'
+import { filterSortBeans, beanOptionLabel } from '../utils/beanFilters'
 import { ORIGINS } from '../constants/origins'
 import { ORIGIN_THEORIES } from '../constants/originTheories'
 
@@ -43,6 +43,13 @@ const toSec = (mmss?: string|null) => {
   return min*60 + sec
 }
 
+/** 秒 → mm:ss */
+const secToMMSS = (s?: number | null) => {
+  if (s == null || !Number.isFinite(s)) return undefined
+  const m = Math.floor(s/60), ss = Math.abs(s%60)
+  return `${m}:${String(ss).padStart(2,'0')}`
+}
+
 /** 日付差（日） "yyyy-mm-dd" 前提 */
 const daysBetween = (from?: string|null, to?: string|null) => {
   if (!from || !to) return null
@@ -69,17 +76,51 @@ const corr = (pairs: Array<[number, number]>)=>{
   return den===0 ? null : (num/den)
 }
 
+/** パーセンタイル（0..1） */
+const percentile = (arr: number[], p: number) => {
+  if (!arr.length) return null
+  const a = [...arr].sort((x,y)=>x-y)
+  const idx = (a.length-1)*p
+  const lo = Math.floor(idx), hi = Math.ceil(idx)
+  if (lo === hi) return a[lo]
+  const w = idx - lo
+  return a[lo]*(1-w) + a[hi]*w
+}
+
+/** 中央値 */
+const median = (arr: number[]) => (percentile(arr, 0.5))
+
 export function DripForm({API, beans, onSaved}:{API:string; beans:any[]; onSaved:()=>void}){
   const [form,setForm] = useState<any>({ ratings:{} })
   const [derive, setDerive] = useState<any>(null)
   const [beanStats, setBeanStats] = useState<any>(null)
   const [beanDrips, setBeanDrips] = useState<any[]>([])
+  const [allDrips, setAllDrips] = useState<any[]>([])               // 🔵 追加：全ドリップ
   const [radarData, setRadarData] = useState<any[]>([])
   const [yMetric, setYMetric] = useState<'overall'|'clean'|'flavor'|'body'>('overall')
   const [editingDripId, setEditingDripId] = useState<number|null>(null)
-  const [last, setLast] = useState<any|null>(null) // 前回ドリップ
+  const [last, setLast] = useState<any|null>(null)
 
-  // 前回値をフォームに流し込む（空欄だけ上書き）
+  // 暫定最適候補
+  type BestPattern = {
+    id: string
+    label: string
+    sourceCount?: number
+    fields: Partial<{
+      grind:number
+      water_temp_c:number
+      dose_g:number
+      water_g:number
+      drawdown_g:number|null
+      time:string // mm:ss
+      dripper:string|null
+      storage:string|null
+    }>
+  }
+  const [bestPatterns, setBestPatterns] = useState<BestPattern[]>([])
+  const [selectedPatternId, setSelectedPatternId] = useState<string>('')
+
+  // 前回値適用
   const applyLast = () => {
     if (!last) return
     const f = (v:any)=> (v===undefined || v===null || v==='' ? undefined : v)
@@ -90,10 +131,27 @@ export function DripForm({API, beans, onSaved}:{API:string; beans:any[]; onSaved
       dose_g:       s.dose_g       ?? f(last.dose_g),
       water_g:      s.water_g      ?? f(last.water_g),
       drawdown_g:   s.drawdown_g   ?? f(last.drawdown_g),
-      time:         s.time         ?? (last.time_sec!=null
-                        ? `${Math.floor(last.time_sec/60)}:${String(last.time_sec%60).padStart(2,'0')}` : undefined),
+      time:         s.time         ?? (last.time_sec!=null ? secToMMSS(last.time_sec) : undefined),
       dripper:      s.dripper      ?? f(last.dripper),
       storage:      s.storage      ?? f(last.storage),
+    }))
+  }
+
+  // 暫定最適値適用
+  const applyBest = () => {
+    const pat = bestPatterns.find(p => p.id === selectedPatternId) || bestPatterns[0]
+    if (!pat) return
+    const f = (v:any)=> (v===undefined || v===null || v==='' ? undefined : v)
+    setForm((s:any)=> ({
+      ...s,
+      grind:        s.grind        ?? f(pat.fields.grind),
+      water_temp_c: s.water_temp_c ?? f(pat.fields.water_temp_c),
+      dose_g:       s.dose_g       ?? f(pat.fields.dose_g),
+      water_g:      s.water_g      ?? f(pat.fields.water_g),
+      drawdown_g:   s.drawdown_g   ?? f(pat.fields.drawdown_g),
+      time:         s.time         ?? f(pat.fields.time),
+      dripper:      s.dripper      ?? f(pat.fields.dripper),
+      storage:      s.storage      ?? f(pat.fields.storage),
     }))
   }
 
@@ -103,29 +161,16 @@ export function DripForm({API, beans, onSaved}:{API:string; beans:any[]; onSaved
   // 統一フィルタ＆ソート
   type SortKey = 'roast_date' | 'roast_level' | 'ppg' | 'name'
   type StockFilter = 'all' | 'in' | 'out'
-
-  const LS = {
-    q: 'ct_beans_q',
-    stock: 'ct_beans_stock',
-    origins: 'ct_beans_origins',
-    sort: 'ct_beans_sort',
-  }
-
+  const LS = { q:'ct_beans_q', stock:'ct_beans_stock', origins:'ct_beans_origins', sort:'ct_beans_sort' }
   const [q, setQ] = useState<string>(() => localStorage.getItem(LS.q) || '')
   const [stock, setStock] = useState<StockFilter>(() => (localStorage.getItem(LS.stock) as StockFilter) || 'all')
-  const [originFilter, setOriginFilter] = useState<string[]>(() => {
-    try{ return JSON.parse(localStorage.getItem(LS.origins) || '[]') }catch{ return [] }
-  })
+  const [originFilter, setOriginFilter] = useState<string[]>(() => { try{ return JSON.parse(localStorage.getItem(LS.origins) || '[]') }catch{ return [] }})
   const [sort, setSort] = useState<SortKey>(() => (localStorage.getItem(LS.sort) as SortKey) || 'roast_date')
-
   useEffect(()=>{ localStorage.setItem(LS.q, q) },[q])
   useEffect(()=>{ localStorage.setItem(LS.stock, stock) },[stock])
   useEffect(()=>{ localStorage.setItem(LS.origins, JSON.stringify(originFilter)) },[originFilter])
   useEffect(()=>{ localStorage.setItem(LS.sort, sort) },[sort])
-
-  const filteredSortedBeans = useMemo(()=>{
-    return filterSortBeans(beans, { q, stock, origins: originFilter, sort })
-  },[beans, q, stock, originFilter, sort])
+  const filteredSortedBeans = useMemo(()=> filterSortBeans(beans, { q, stock, origins: originFilter, sort }),[beans, q, stock, originFilter, sort])
 
   // セオリー/推奨/挽き目表記
   useEffect(()=>{
@@ -148,7 +193,7 @@ export function DripForm({API, beans, onSaved}:{API:string; beans:any[]; onSaved
     fetch(`${API}/api/stats?scope=bean&bean_id=${form.bean_id}`).then(r=>r.json()).then(setBeanStats)
   },[form.bean_id, API])
 
-  // 最新ドリップ（プリセット用）
+  // 最新ドリップ
   useEffect(()=>{
     if(!form.bean_id){ setLast(null); return }
     fetch(`${API}/api/drips/last?bean_id=${form.bean_id}`)
@@ -157,12 +202,13 @@ export function DripForm({API, beans, onSaved}:{API:string; beans:any[]; onSaved
       .catch(()=> setLast(null))
   },[form.bean_id, API])
 
-  // 豆ごとのドリップ取得→レーダー＆相関用差分
+  // ドリップ取得（全件 & 指定豆）
   useEffect(()=>{
-    if(!form.bean_id){ setBeanDrips([]); setRadarData([]); return }
+    if(!form.bean_id){ setBeanDrips([]); setRadarData([]); setAllDrips([]); return }
     ;(async ()=>{
       const r = await fetch(`${API}/api/drips`)
       const all = await r.json()
+      setAllDrips(all) // 🔵 保存
       const mine = all.filter((d:any)=> String(d.bean_id)===String(form.bean_id))
 
       const keys = [
@@ -198,6 +244,106 @@ export function DripForm({API, beans, onSaved}:{API:string; beans:any[]; onSaved
       setBeanDrips(withDeltas)
     })()
   },[form.bean_id, API])
+
+  // 暫定最適パターン生成
+  useEffect(()=>{
+    const b = beans.find(x=> String(x.id)===String(form.bean_id))
+    if (!b) { setBestPatterns([]); setSelectedPatternId(''); return }
+
+    const firstOrigins = String(b.origin||'').split(',').map((s:string)=>s.trim()).filter(Boolean)
+    const shareOrigin = (bean2:any) =>{
+      if (!bean2?.origin) return false
+      const os2 = String(bean2.origin).split(',').map((s:string)=>s.trim())
+      return firstOrigins.some(o => os2.includes(o))
+    }
+
+    const byId: Record<string, any> = {}
+    for (const bean of beans) byId[String(bean.id)] = bean
+
+    // 候補抽出
+    const candidatesSameBean = allDrips.filter(d => String(d.bean_id)===String(b.id))
+    const candidatesSameRoast = allDrips.filter(d => String(d.bean_id)!==String(b.id) && byId[String(d.bean_id)]?.roast_level === b.roast_level)
+    const candidatesSameOrigin = allDrips.filter(d => {
+      const bb = byId[String(d.bean_id)]
+      return String(d.bean_id)!==String(b.id) && bb && shareOrigin(bb)
+    })
+
+    const takeTop = (arr:any[], k:number) => {
+      return arr
+        .filter(d=> Number.isFinite(Number(d?.ratings?.overall)))
+        .sort((a,b)=> Number(b.ratings.overall) - Number(a.ratings.overall) || (new Date(b.brew_date).getTime() - new Date(a.brew_date).getTime()))
+        .slice(0,k)
+    }
+
+    const buildSingle = (title:string, d:any): BestPattern | null => {
+      if (!d) return null
+      return {
+        id: `single:${title}:${d.id}`,
+        label: `${title} ベスト（★${d.ratings?.overall ?? '-'} / ${d.brew_date} / ${d.dripper ?? '—'}）`,
+        fields: {
+          grind: d.grind,
+          water_temp_c: d.water_temp_c,
+          dose_g: d.dose_g,
+          water_g: d.water_g,
+          drawdown_g: d.drawdown_g ?? null,
+          time: secToMMSS(d.time_sec),
+          dripper: d.dripper ?? null,
+          storage: d.storage ?? null,
+        }
+      }
+    }
+
+    const buildRange = (title:string, arr:any[], kShow:number): BestPattern | null => {
+      const top = takeTop(arr, kShow)
+      if (!top.length) return null
+      const num = (xs:(number|null|undefined)[]) => xs.map(v=> Number(v)).filter(v=>Number.isFinite(v)) as number[]
+      const g  = median(num(top.map(d=>d.grind)))
+      const wt = median(num(top.map(d=>d.water_temp_c)))
+      const dg = median(num(top.map(d=>d.dose_g)))
+      const wg = median(num(top.map(d=>d.water_g)))
+      const dd = median(num(top.map(d=>d.drawdown_g)))
+      const ts = median(num(top.map(d=>d.time_sec)))
+      // 代表ドリッパー：最頻値
+      const mode = (values:(string|null|undefined)[])=>{
+        const m = new Map<string, number>()
+        for(const v of values){ if(!v) continue; m.set(v,(m.get(v)||0)+1) }
+        let best: string|undefined, cnt = -1
+        for(const [k,c] of m){ if(c>cnt){ best=k; cnt=c } }
+        return best
+      }
+      const dr = mode(top.map(d=>d.dripper))
+      const st = mode(top.map(d=>d.storage))
+      return {
+        id: `range:${title}:${top.map(d=>d.id).join(',')}`,
+        label: `${title} トップ${top.length}中央値`,
+        sourceCount: top.length,
+        fields: {
+          grind: g ?? undefined,
+          water_temp_c: wt ?? undefined,
+          dose_g: dg ?? undefined,
+          water_g: wg ?? undefined,
+          drawdown_g: (dd ?? null) as any,
+          time: secToMMSS(ts ?? undefined),
+          dripper: dr ?? null,
+          storage: st ?? null,
+        }
+      }
+    }
+
+    const pats: BestPattern[] = []
+    const sbTop1 = takeTop(candidatesSameBean, 1)[0]
+    const srTop1 = takeTop(candidatesSameRoast, 1)[0]
+    const soTop1 = takeTop(candidatesSameOrigin, 1)[0]
+    buildSingle('同一豆', sbTop1) && pats.push(buildSingle('同一豆', sbTop1)!)
+    buildSingle('同焙煎度', srTop1) && pats.push(buildSingle('同焙煎度', srTop1)!)
+    buildSingle('同産地系', soTop1) && pats.push(buildSingle('同産地系', soTop1)!)
+    buildRange('同一豆', candidatesSameBean, 3) && pats.push(buildRange('同一豆', candidatesSameBean, 3)!)
+    buildRange('同焙煎度', candidatesSameRoast, 5) && pats.push(buildRange('同焙煎度', candidatesSameRoast, 5)!)
+    buildRange('同産地系', candidatesSameOrigin, 5) && pats.push(buildRange('同産地系', candidatesSameOrigin, 5)!)
+
+    setBestPatterns(pats)
+    setSelectedPatternId(pats[0]?.id || '')
+  },[form.bean_id, beans, allDrips])
 
   const validate = ()=>{
     if(!form.bean_id) return '使用豆'
@@ -247,14 +393,10 @@ export function DripForm({API, beans, onSaved}:{API:string; beans:any[]; onSaved
   // 表示ヘルパ
   const selBean = beans.find(b=> String(b.id)===String(form.bean_id))
   const showOrDash = (cond:any, val:any, dashWhenBean?:string)=> cond ? (val ?? '—') : (dashWhenBean ?? '--')
-
-  // 不明判定
   const isUnknown = (v?: any) => {
     const s = String(v ?? '').trim()
     return !s || s === '—' || s === '-' || s === '不明' || s.startsWith('不明')
   }
-
-  // 値＋セオリーを結合（どちらか不明なら省略）
   const theoryWithValue = (theory?: any, value?: any) => {
     const t = isUnknown(theory) ? '' : String(theory)
     const v = isUnknown(value) ? '' : String(value)
@@ -263,34 +405,16 @@ export function DripForm({API, beans, onSaved}:{API:string; beans:any[]; onSaved
     if (t) return t
     return ''
   }
-
-  // 行描画（空文字なら行ごと非表示）
-  const TheoryRow = ({
-    label, theory, value, show = true,
-  }: {label:string; theory:any; value:any; show?:boolean}) => {
+  const TheoryRow = ({ label, theory, value, show = true }:{label:string; theory:any; value:any; show?:boolean}) => {
     if (!show) return null
     const txt = theoryWithValue(theory, value)
     return txt ? <div>{label}：{txt}</div> : null
   }
-
   const StarRow = ({avg}:{avg:number|undefined})=>{
     if (avg == null || isNaN(Number(avg))) return <span>--</span>
     const s = Math.round(Number(avg)/2)
     return (<span aria-label={`rating ${s} of 5`}>{'★★★★★'.slice(0,s)}{'☆☆☆☆☆'.slice(0,5-s)} <span className="text-[11px] text-gray-500">({avg})</span></span>)
   }
-
-  const optionLabel = (b:any)=>{
-    const parts:string[] = []
-    if (b.name) parts.push(b.name)
-    if (b.origin) parts.push(b.origin)
-    if (b.variety) parts.push(b.variety)
-    if (b.process) parts.push(b.process)
-    if (b.addl_process) parts.push(b.addl_process)
-    const base = parts.join('・')
-    return b.roast_level ? `${base}（${b.roast_level}）` : base
-  }
-
-  // ブレンド対応：産地セオリー文字列
   const originTheoryText = ()=>{
     if(!selBean?.origin) return '—'
     const cs = String(selBean.origin).split(',').map(s=>s.trim()).filter(Boolean)
@@ -304,28 +428,21 @@ export function DripForm({API, beans, onSaved}:{API:string; beans:any[]; onSaved
     label: yMetric === 'overall' ? '総合' : (yMetric==='clean'?'クリーンさ':(yMetric==='flavor'?'風味':'コク'))
   }),[yMetric])
 
-  // 豆ごと相関ペア & r
+  // 相関
   const beanPairsTemp = useMemo(()=>{
     return beanDrips
       .map((d:any)=> [d?._deltas?.temp_delta, d?.ratings?.[yMetric]] as [number,number])
       .filter(([x,y])=> Number.isFinite(x) && Number.isFinite(y))
   },[beanDrips, yMetric])
-
   const beanPairsTime = useMemo(()=>{
     return beanDrips
       .map((d:any)=> [d?._deltas?.time_delta, d?.ratings?.[yMetric]] as [number,number])
       .filter(([x,y])=> Number.isFinite(x) && Number.isFinite(y))
   },[beanDrips, yMetric])
+  const rTempBean = useMemo(()=> { const v = corr(beanPairsTemp); return (v==null? null : Math.round(v*100)/100) },[beanPairsTemp])
+  const rTimeBean = useMemo(()=> { const v = corr(beanPairsTime); return (v==null? null : Math.round(v*100)/100) },[beanPairsTime])
 
-  const rTempBean = useMemo(()=> {
-    const v = corr(beanPairsTemp); return (v==null? null : Math.round(v*100)/100)
-  },[beanPairsTemp])
-
-  const rTimeBean = useMemo(()=> {
-    const v = corr(beanPairsTime); return (v==null? null : Math.round(v*100)/100)
-  },[beanPairsTime])
-
-  // ---- 表示条件フラグ（JSXの外で定義） ----
+  // 表示条件
   const hasStats     = !!(beanStats && Number(beanStats.count) > 0)
   const hasAvg       = !!(hasStats && beanStats.avg_overall != null)
   const hasByMethod  = !!(hasStats && Array.isArray(beanStats.by_method) && beanStats.by_method.length > 0)
@@ -335,7 +452,7 @@ export function DripForm({API, beans, onSaved}:{API:string; beans:any[]; onSaved
 
   return (
     <form onSubmit={submit} className="space-y-4">
-      {/* ソート・絞り込み（統一仕様） */}
+      {/* ソート・絞り込み */}
       <div className="flex flex-col gap-2 sm:flex-row sm:items-end">
         <div className="flex-1">
           <label className="block text-xs text-gray-600">フリーワード検索</label>
@@ -383,15 +500,38 @@ export function DripForm({API, beans, onSaved}:{API:string; beans:any[]; onSaved
         <input className="border rounded p-2" type="date" value={form.brew_date||''} onChange={e=>handle('brew_date',e.target.value)} required />
       </div>
 
-      {last && (
-        <div className="text-xs flex items-center gap-2">
-          <span className="text-gray-600">
-            前回（{last.brew_date} / {last.dripper ?? '—'}）：挽き{last.grind ?? '—'}・湯温{last.water_temp_c ?? '—'}℃
-            ・豆{last.dose_g ?? '—'}g・湯量{last.water_g ?? '—'}g・時間{last.time_sec!=null ? `${Math.floor(last.time_sec/60)}:${String(last.time_sec%60).padStart(2,'0')}` : '—'}
-          </span>
-          <button type="button" onClick={applyLast} className="px-2 py-1 rounded border bg-white hover:bg-gray-50">
-            前回値を適用
-          </button>
+      {(last || bestPatterns.length>0) && (
+        <div className="text-xs flex flex-col gap-2 sm:flex-row sm:items-center sm:gap-3">
+          {last && (
+            <>
+              <span className="text-gray-600">
+                前回（{last.brew_date} / {last.dripper ?? '—'}）：挽き{last.grind ?? '—'}・湯温{last.water_temp_c ?? '—'}℃
+                ・豆{last.dose_g ?? '—'}g・湯量{last.water_g ?? '—'}g・時間{last.time_sec!=null ? `${Math.floor(last.time_sec/60)}:${String(last.time_sec%60).padStart(2,'0')}` : '—'}
+              </span>
+              <button type="button" onClick={applyLast} className="px-2 py-1 rounded border bg-white hover:bg-gray-50">
+                前回値を適用
+              </button>
+            </>
+          )}
+
+          {bestPatterns.length>0 && (
+            <>
+              <div className="flex items-center gap-2">
+                <select
+                  className="border rounded p-1"
+                  value={selectedPatternId}
+                  onChange={e=>setSelectedPatternId(e.target.value)}
+                >
+                  {bestPatterns.map(p=>(
+                    <option key={p.id} value={p.id}>{p.label}</option>
+                  ))}
+                </select>
+                <button type="button" onClick={applyBest} className="px-2 py-1 rounded border bg-white hover:bg-gray-50">
+                  暫定最適値を適用
+                </button>
+              </div>
+            </>
+          )}
         </div>
       )}
 
@@ -412,11 +552,10 @@ export function DripForm({API, beans, onSaved}:{API:string; beans:any[]; onSaved
         })()}
       </div>
 
-      {/* セレクト直下：豆セオリー＋豆ごと統計 */}
+      {/* セオリー & 統計 */}
       <div className="bg-gray-50 border rounded p-2 space-y-2 text-sm">
         <div className="font-semibold">選択豆：{selBean?.name ?? '--'}</div>
 
-        {/* 不明/—/空 は行ごと非表示 */}
         <TheoryRow label="産地セオリー" theory={originTheoryText()} value={selBean?.origin} show={!!form.bean_id}/>
         <TheoryRow label="精製セオリー" theory={derive?.theory?.process} value={selBean?.process} show={!!form.bean_id}/>
         <TheoryRow label="追加処理セオリー" theory={derive?.theory?.addl_process} value={selBean?.addl_process} show={!!form.bean_id}/>
@@ -426,7 +565,6 @@ export function DripForm({API, beans, onSaved}:{API:string; beans:any[]; onSaved
 
         {hasAvg && (<div className="text-sm">平均評価（★）：<StarRow avg={beanStats?.avg_overall} /></div>)}
 
-        {/* レーダー */}
         {hasRadar && (
           <div className="h-48">
             <ResponsiveContainer>
@@ -441,7 +579,6 @@ export function DripForm({API, beans, onSaved}:{API:string; beans:any[]; onSaved
           </div>
         )}
 
-        {/* 抽出方法別バー */}
         {hasStats && (
           <div className="text-xs">
             記録数：{beanStats.count}　平均：{beanStats.avg_overall}　最高：{beanStats.max_overall}
@@ -462,7 +599,7 @@ export function DripForm({API, beans, onSaved}:{API:string; beans:any[]; onSaved
           </div>
         )}
 
-        {/* 相関：湯温差 / 時間差 */}
+        {/* 相関 */}
         <div className="flex items-center gap-2 text-xs">
           <span>評価指標：</span>
           <select className="border rounded p-1" value={yMetric} onChange={e=>setYMetric(e.target.value as any)}>
@@ -520,7 +657,7 @@ export function DripForm({API, beans, onSaved}:{API:string; beans:any[]; onSaved
         </div>
       </div>
 
-      {/* 入力群：各入力直下に推奨/差分 */}
+      {/* 入力群 */}
       <div className="grid grid-cols-3 gap-2">
         <div>
           <input className="border rounded p-2 w-full" placeholder="挽き目 (1~17)" value={form.grind||''} onChange={e=>handle('grind',e.target.value)} />
