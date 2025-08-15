@@ -1,6 +1,5 @@
 // src/components/BeanForm.tsx
 import React, { useEffect, useMemo, useState } from 'react'
-import { ORIGINS } from '../constants/origins'
 import { ORIGIN_THEORIES } from '../constants/originTheories'
 import { filterSortBeans, beanOptionLabel } from '../utils/beanFilters'
 import { ORIGINS } from '../constants/origins'
@@ -173,16 +172,7 @@ const filteredBeans = React.useMemo(()=>{
   // 削除モーダル
   const [dangerOpen, setDangerOpen] = useState(false)
   const [dangerBean, setDangerBean] = useState<Bean|null>(null)
-
-  // フィルター/ソート状態
-  const [query, setQuery] = useState('')
-  const [stock, setStock] = useState<'all'|'in'|'out'>('all')
-  const [originFilter, setOriginFilter] = useState<string[]>([])
-  const [sortKey, setSortKey] = useState<'name'|'roast'|'ppg'>('name')
-  const [sortDir, setSortDir] = useState<'asc'|'desc'>('asc')
-
   const handle = (k:string,v:any)=> setForm((s:any)=> ({...s,[k]:v}))
-
   const loadBeans = async ()=>{
     const r = await fetch(`${API}/api/beans`)
     setBeans(await r.json())
@@ -295,49 +285,6 @@ const deleteBean = async (b:any)=>{
     if(editingId === dangerBean.id) clearForm()
   }
 
-  // 一覧のフィルタ＆ソート
-  const filtered = useMemo(()=>{
-    let list = beans.slice()
-
-    // キーワード（名前／産地／精製）
-    const q = query.trim()
-    if(q){
-      const lc = q.toLowerCase()
-      list = list.filter(b=>
-        (b.name||'').toLowerCase().includes(lc) ||
-        (b.origin||'').toLowerCase().includes(lc) ||
-        (b.process||'').toLowerCase().includes(lc)
-      )
-    }
-
-    // 在庫
-    if(stock==='in') list = list.filter(b=>b.in_stock)
-    if(stock==='out') list = list.filter(b=>!b.in_stock)
-
-    // 産地フィルタ（いずれか一致）
-    if(originFilter.length){
-      list = list.filter(b=>{
-        const parts = String(b.origin||'').split(',').map(s=>s.trim())
-        return originFilter.some(o=>parts.includes(o))
-      })
-    }
-
-    // ソート
-    list.sort((a,b)=>{
-      let av:any, bv:any
-      if (sortKey==='name'){ av=a.name; bv=b.name }
-      else if (sortKey==='roast'){ av=ROASTS.indexOf(a.roast_level as any); bv=ROASTS.indexOf(b.roast_level as any) }
-      else { // ppg
-        av = pricePerG(a) ?? Infinity
-        bv = pricePerG(b) ?? Infinity
-      }
-      const cmp = (av>bv?1:av<bv?-1:0)
-      return sortDir==='asc'? cmp : -cmp
-    })
-
-    return list
-  },[beans, query, stock, originFilter, sortKey, sortDir])
-
   return (
     <div className="space-y-4">
       {/* 登録フォーム */}
@@ -448,11 +395,11 @@ const deleteBean = async (b:any)=>{
 </section>
 
       {/* 一覧（編集／削除） */}
-      {filtered.length>0 ? (
+      {filteredBeans.length>0 ? (
         <div className="text-sm">
-          <div className="mb-1 font-semibold">登録済みの豆（{filtered.length}件）</div>
+          <div className="mb-1 font-semibold">登録済みの豆（{filteredBeans.length}件）</div>
           <ul className="space-y-1">
-            {filtered.map(b=>{
+             {filteredBeans.map(b=>{
               const ppg = pricePerG(b)
               return (
                 <li key={b.id} className="flex items-center justify-between gap-3 rounded border p-2">
