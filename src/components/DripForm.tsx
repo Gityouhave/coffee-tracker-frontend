@@ -1,9 +1,13 @@
+// src/components/DripForm.tsx
 import React, { useEffect, useMemo, useState } from 'react'
 import {
   ResponsiveContainer, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend,
   RadarChart, PolarGrid, PolarAngleAxis, PolarRadiusAxis, Radar,
   ScatterChart, Scatter
 } from 'recharts'
+
+/** 焙煎度リスト（並び順用） */
+const ROASTS = ['ライト','シナモン','ミディアム','ハイ','シティ','フルシティ','フレンチ','イタリアン'] as const
 
 /** 焙煎度→推奨湯温（℃） */
 const ROAST_TEMP: Record<string, number> = {
@@ -76,6 +80,71 @@ export function DripForm({API, beans, onSaved}:{API:string; beans:any[]; onSaved
   const handle = (k:string,v:any)=> setForm((s:any)=> ({...s,[k]:v}))
   const handleRating = (k:string,v:any)=> setForm((s:any)=> ({...s, ratings:{...s.ratings, [k]:v}}))
 
+  // -------- ここから：豆選択の並び替え（BeanForm と同等） --------
+  type SortKey =
+    | 'stock_name'         // 在庫優先 → 名前
+    | 'name'               // 名前順
+    | 'roast_asc'          // 焙煎度 浅→深
+    | 'roast_desc'         // 焙煎度 深→浅
+    | 'roast_date_desc'    // 焙煎日 新→旧
+    | 'roast_date_asc'     // 焙煎日 旧→新
+
+  const [sortKey, setSortKey] = useState<SortKey>(() => {
+    const saved = localStorage.getItem('ct_sort_beans_for_drip') as SortKey | null
+    return saved || 'stock_name'
+  })
+  const [query, setQuery] = useState('')
+  const [onlyStock, setOnlyStock] = useState(false)
+
+  useEffect(()=>{ localStorage.setItem('ct_sort_beans_for_drip', sortKey) },[sortKey])
+
+  const roastIndex = (lvl: string) => {
+    const i = ROASTS.indexOf(lvl as any)
+    return i >= 0 ? i : ROASTS.indexOf('シティ')
+  }
+  const nameKey = (s: string) => (s || '').toLocaleLowerCase()
+  const parsedDate = (iso?: string | null) => {
+    if (!iso) return null
+    const t = Date.parse(iso)
+    return Number.isFinite(t) ? t : null
+  }
+
+  const filteredSortedBeans = useMemo(()=>{
+    let list = beans as any[]
+
+    if (onlyStock) list = list.filter(b=> !!b.in_stock)
+    if (query.trim()) {
+      const q = query.trim().toLowerCase()
+      list = list.filter(b =>
+        (b.name || '').toLowerCase().includes(q) ||
+        (b.origin || '').toLowerCase().includes(q)
+      )
+    }
+
+    const byName = (a:any,b:any)=> nameKey(a.name).localeCompare(nameKey(b.name), 'ja')
+    const byRoastAsc = (a:any,b:any)=> roastIndex(a.roast_level) - roastIndex(b.roast_level)
+    const byRoastDesc = (a:any,b:any)=> roastIndex(b.roast_level) - roastIndex(a.roast_level)
+    const byRoastDateDesc = (a:any,b:any)=> (parsedDate(b.roast_date) ?? -Infinity) - (parsedDate(a.roast_date) ?? -Infinity)
+    const byRoastDateAsc  = (a:any,b:any)=> (parsedDate(a.roast_date) ??  Infinity) - (parsedDate(b.roast_date) ??  Infinity)
+    const stockFirst = (a:any,b:any)=> {
+      const sa = a.in_stock ? 0 : 1
+      const sb = b.in_stock ? 0 : 1
+      if (sa !== sb) return sa - sb
+      return byName(a,b)
+    }
+
+    const cmp =
+      sortKey === 'stock_name' ? stockFirst :
+      sortKey === 'name' ? byName :
+      sortKey === 'roast_asc' ? byRoastAsc :
+      sortKey === 'roast_desc' ? byRoastDesc :
+      sortKey === 'roast_date_desc' ? byRoastDateDesc :
+      byRoastDateAsc
+
+    return [...list].sort(cmp)
+  },[beans, onlyStock, query, sortKey])
+  // -------- ここまで：豆選択の並び替え --------
+
   // セオリー/推奨/挽き目表記（brew_date 変更でも aging を再計算させたいので依存に含める）
   useEffect(()=>{
     const bean_id = form.bean_id
@@ -87,7 +156,7 @@ export function DripForm({API, beans, onSaved}:{API:string; beans:any[]; onSaved
     if(form.water_g) params.set('water_g', form.water_g)
     if(form.water_temp_c) params.set('water_temp_c', form.water_temp_c)
     if(form.dripper) params.set('dripper', form.dripper)
-    if(form.brew_date) params.set('brew_date', form.brew_date) // aging_days を API 側で使う場合に備え
+    if(form.brew_date) params.set('brew_date', form.brew_date)
     fetch(`${API}/api/derive?`+params.toString()).then(r=>r.json()).then(setDerive)
   },[form.bean_id, form.grind, form.dose_g, form.water_g, form.water_temp_c, form.dripper, form.brew_date, API])
 
@@ -105,7 +174,6 @@ export function DripForm({API, beans, onSaved}:{API:string; beans:any[]; onSaved
       const all = await r.json()
       const mine = all.filter((d:any)=> String(d.bean_id)===String(form.bean_id))
 
-      // レーダー（豆ごと平均）
       const keys = [
         {key:'clean', label:'クリーンさ'},
         {key:'flavor', label:'風味'},
@@ -122,7 +190,6 @@ export function DripForm({API, beans, onSaved}:{API:string; beans:any[]; onSaved
       })
       setRadarData(rd)
 
-      // 相関用差分付与
       const withDeltas = mine.map((d:any)=>{
         const roast = d.bean?.roast_level ?? d.roast_level ?? 'シティ'
         const recTemp = ROAST_TEMP[roast] ?? 82.5
@@ -141,23 +208,22 @@ export function DripForm({API, beans, onSaved}:{API:string; beans:any[]; onSaved
   },[form.bean_id, API])
 
   const validate = ()=>{
-  if(!form.bean_id) return '使用豆'
-  if(!form.brew_date) return 'ドリップ日'
-  if(form.grind==='' || form.grind==null) return '挽き目'
-  if(form.water_temp_c==='' || form.water_temp_c==null) return '湯温(℃)'
-  if(form.dose_g==='' || form.dose_g==null) return '豆(g)'
-  if(form.water_g==='' || form.water_g==null) return '湯量(g)'
-  if(!form.time) return '抽出時間(mm:ss)'
-  if(!form.dripper) return 'ドリッパー'
-  if(!form.storage) return '保存状態'
-  return null
-}
+    if(!form.bean_id) return '使用豆'
+    if(!form.brew_date) return 'ドリップ日'
+    if(form.grind==='' || form.grind==null) return '挽き目'
+    if(form.water_temp_c==='' || form.water_temp_c==null) return '湯温(℃)'
+    if(form.dose_g==='' || form.dose_g==null) return '豆(g)'
+    if(form.water_g==='' || form.water_g==null) return '湯量(g)'
+    if(!form.time) return '抽出時間(mm:ss)'
+    if(!form.dripper) return 'ドリッパー'
+    if(!form.storage) return '保存状態'
+    return null
+  }
 
-
-const submit = async (e:any)=>{
-  e.preventDefault()
-  const miss = validate()
-  if(miss){ alert(`必須項目が不足：${miss}`); return }
+  const submit = async (e:any)=>{
+    e.preventDefault()
+    const miss = validate()
+    if(miss){ alert(`必須項目が不足：${miss}`); return }
     const payload = {
       bean_id: parseInt(form.bean_id),
       brew_date: form.brew_date,
@@ -181,9 +247,9 @@ const submit = async (e:any)=>{
       overall: form.ratings?.overall? parseInt(form.ratings.overall): null,
     }
     const url = editingDripId ? `${API}/api/drips/${editingDripId}` : `${API}/api/drips`
-  const method = editingDripId ? 'PUT' : 'POST'
-  const r = await fetch(url, {method, headers:{'Content-Type':'application/json'}, body: JSON.stringify(payload)})
-  if(r.ok){ setForm({ratings:{}}); setEditingDripId(null); onSaved() }
+    const method = editingDripId ? 'PUT' : 'POST'
+    const r = await fetch(url, {method, headers:{'Content-Type':'application/json'}, body: JSON.stringify(payload)})
+    if(r.ok){ setForm({ratings:{}}); setEditingDripId(null); onSaved() }
   }
 
   // 表示ヘルパ
@@ -237,12 +303,36 @@ const submit = async (e:any)=>{
 
   return (
     <form onSubmit={submit} className="space-y-4">
-      {/* 1列目：豆＆日付 */}
+      {/* ソート・絞り込み（BeanForm と同等） */}
+      <div className="flex flex-col sm:flex-row gap-2">
+        <div className="flex items-center gap-2">
+          <label className="text-sm text-gray-600">豆のソート</label>
+          <select className="border rounded p-2 text-sm" value={sortKey} onChange={e=>setSortKey(e.target.value as SortKey)}>
+            <option value="stock_name">在庫優先 → 名前</option>
+            <option value="name">名前（A→Z / あ→ん）</option>
+            <option value="roast_asc">焙煎度（浅→深）</option>
+            <option value="roast_desc">焙煎度（深→浅）</option>
+            <option value="roast_date_desc">焙煎日（新→旧）</option>
+            <option value="roast_date_asc">焙煎日（旧→新）</option>
+          </select>
+        </div>
+        <div className="flex items-center gap-2">
+          <input className="border rounded p-2 text-sm w-44" placeholder="検索（名前・産地）" value={query} onChange={e=>setQuery(e.target.value)} />
+          <label className="inline-flex items-center gap-1 text-sm">
+            <input type="checkbox" checked={onlyStock} onChange={e=> setOnlyStock(e.target.checked)} />
+            在庫のみ
+          </label>
+        </div>
+      </div>
+
+      {/* 1列目：豆＆日付（並び替え済みの候補を使用） */}
       <div className="grid grid-cols-2 gap-2">
         <select className="border rounded p-2" value={form.bean_id||''} onChange={e=>handle('bean_id', e.target.value)} required>
           <option value="">使用豆を選択</option>
-          {beans.filter(b=>b.in_stock).map(b => (
-            <option key={b.id} value={b.id}>{optionLabel(b)}</option>
+          {filteredSortedBeans.map((b:any) => (
+            <option key={b.id} value={b.id}>
+              {b.in_stock ? '🟢' : '⚪️'} {optionLabel(b)}{b.roast_date ? ` / ${b.roast_date}` : ''}
+            </option>
           ))}
         </select>
         <input className="border rounded p-2" type="date" value={form.brew_date||''} onChange={e=>handle('brew_date',e.target.value)} required />
@@ -392,24 +482,25 @@ const submit = async (e:any)=>{
           <input className="border rounded p-2 w-full" placeholder="豆 (g)" value={form.dose_g||''} onChange={e=>handle('dose_g',e.target.value)} />
           <div className="text-xs text-gray-600 mt-1">推奨レシオ：{showOrDash(!!form.bean_id, derive?.ratio?.recommended_ratio)}倍</div>
           <div className="text-[11px] text-gray-500">最大推奨量：{showOrDash(!!form.bean_id, derive?.dose?.max_recommended_g)}</div>
-          <div className="text-[11px] text-gray-600 mt-1">
-  {(() => {
-    const b = beans.find(b => String(b.id) === String(form.bean_id));
-    const price = Number(b?.price_yen), weight = Number(b?.weight_g), dose = Number(form.dose_g);
-    if (!b || !Number.isFinite(price) || !Number.isFinite(weight) || !Number.isFinite(dose) || weight <= 0) return '費用：--';
-    const perG = Math.round((price / weight) * 100) / 100;
-    const cost = Math.round(perG * dose * 100) / 100;
-    return `費用：約 ${cost} 円（${perG} 円/g）`;
-  })()}
-</div>
-
+          <div className="text:[11px] text-gray-600 mt-1">
+            {(() => {
+              const b = beans.find(b => String(b.id) === String(form.bean_id));
+              const price = Number(b?.price_yen), weight = Number(b?.weight_g), dose = Number(form.dose_g);
+              if (!b || !Number.isFinite(price) || !Number.isFinite(weight) || !Number.isFinite(dose) || weight <= 0) return '費用：--';
+              const perG = Math.round((price / weight) * 100) / 100;
+              const cost = Math.round(perG * dose * 100) / 100;
+              return `費用：約 ${cost} 円（${perG} 円/g）`;
+            })()}
+          </div>
         </div>
+
         <div>
           <input className="border rounded p-2 w-full" placeholder="湯量 (g)" value={form.water_g||''} onChange={e=>handle('water_g',e.target.value)} />
           <div className="text-xs text-gray-600 mt-1">
             推奨湯量：{ (form.bean_id && form.dose_g) ? (derive?.ratio?.recommended_water_g ?? '—') : '--' }g（Δ { (form.bean_id && form.dose_g && form.water_g) ? (derive?.ratio?.delta_from_input ?? '—') : '--' }）
           </div>
         </div>
+
         <input className="border rounded p-2" placeholder="落ちきり量 (g)" value={form.drawdown_g||''} onChange={e=>handle('drawdown_g',e.target.value)} />
       </div>
 
@@ -434,30 +525,28 @@ const submit = async (e:any)=>{
         ))}
       </div>
 
-   {/* 価格見積（豆の単価 × 使用量） */}
-{(() => {
-  const b = beans.find(b => String(b.id) === String(form.bean_id));
-  const price = Number(b?.price_yen);
-  const weight = Number(b?.weight_g);
-  const dose = Number(form.dose_g);
-  if (!b || !Number.isFinite(price) || !Number.isFinite(weight) || !Number.isFinite(dose) || weight <= 0) {
-    return null; // 必要な情報が無ければ非表示
-  }
-  const perG = Math.round((price / weight) * 100) / 100;       // 単価（円/g, 小数2桁）
-  const cost = Math.round(perG * dose * 100) / 100;            // 費用（円, 小数2桁）
-  return (
-    <div className="text-sm bg-gray-50 border rounded p-2">
-      費用見積：{cost} 円（単価 {perG} 円/g）
-    </div>
-  );
-})()}
+      {/* 価格見積（豆の単価 × 使用量） */}
+      {(() => {
+        const b = beans.find(b => String(b.id) === String(form.bean_id));
+        const price = Number(b?.price_yen);
+        const weight = Number(b?.weight_g);
+        const dose = Number(form.dose_g);
+        if (!b || !Number.isFinite(price) || !Number.isFinite(weight) || !Number.isFinite(dose) || weight <= 0) {
+          return null;
+        }
+        const perG = Math.round((price / weight) * 100) / 100;
+        const cost = Math.round(perG * dose * 100) / 100;
+        return (
+          <div className="text-sm bg-gray-50 border rounded p-2">
+            費用見積：{cost} 円（単価 {perG} 円/g）
+          </div>
+        );
+      })()}
 
-
-            {/* ---- 単一ドリップ可視化：入力中プレビュー（保存前に確認） ---- */}
+      {/* ---- 単一ドリップ可視化：入力中プレビュー ---- */}
       <div className="bg-white border rounded p-3 space-y-2">
         <div className="font-semibold text-sm">プレビュー（今回の抽出）</div>
 
-        {/* 星（overall があればそれ、なければ入力済み評価の平均で暫定） */}
         <div className="text-sm">
           {(() => {
             const r = form.ratings || {}
@@ -477,7 +566,6 @@ const submit = async (e:any)=>{
           })()}
         </div>
 
-        {/* レーダー（入力中の値だけ反映） */}
         <div className="h-44">
           <ResponsiveContainer>
             <RadarChart data={[
@@ -498,7 +586,6 @@ const submit = async (e:any)=>{
           </ResponsiveContainer>
         </div>
 
-        {/* 推奨とのΔ（いま入力している値ベース） */}
         <div className="grid sm:grid-cols-3 gap-2 text-xs">
           <div className="border rounded p-2">
             <div className="font-medium">湯温</div>
@@ -527,8 +614,9 @@ const submit = async (e:any)=>{
       </div>
       {/* ---- /プレビュー ---- */}
 
-
       <button className="px-3 py-2 rounded bg-blue-600 text-white">ドリップを記録</button>
     </form>
   )
 }
+
+export default DripForm
