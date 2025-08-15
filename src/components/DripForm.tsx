@@ -87,7 +87,6 @@ const nearRoastSet = (level?: string|null) => {
 // ここまではユーティリティ類（nearRoastSet まで）
 
 export function DripForm({API, beans, onSaved}:{API:string; beans:any[]; onSaved:()=>void}){
-
   // --- ここから（コンポーネント内） ---
   const [form, setForm] = useState<any>({ ratings:{} })
   const [derive, setDerive] = useState<any>(null)
@@ -540,8 +539,8 @@ const RatingSelect = ({
         <select className="border rounded p-2" value={form.bean_id||''} onChange={e=>handle('bean_id', e.target.value)} required>
           <option value="">使用豆を選択</option>
           {filteredSortedBeans.map((b:any) => (
-            <option key={b.id} value={b.id}>{beanOptionLabel(b)}</option>
-          ))}
+  <option key={b.id} value={String(b.id)}>{beanOptionLabel(b)}</option>
+))}
         </select>
         <input
   className="border rounded p-2"
