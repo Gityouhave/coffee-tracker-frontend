@@ -571,32 +571,23 @@ const RatingSelect = ({
         {!isUnknown(selBean?.brew_policy) && (<div>ドリップ方針メモ：{selBean?.brew_policy}</div>)}
 
         {hasAvg && (<div className="text-sm">平均評価（★）：<StarRow avg={beanStats?.avg_overall} /></div>)}
-
-        {/* レーダー：この豆の平均 / 同焙煎度ベスト / 同産地×近焙煎度ベスト */}
-        {hasRadar && (
-          <div className="h-56">
-            <ResponsiveContainer>
-              <RadarChart data={radarData}>
-                <PolarGrid />
-                <PolarAngleAxis dataKey="subject" />
-                <PolarRadiusAxis angle={30} domain={[0, 10]} />
-                <Radar name="この豆の平均" dataKey="beanAvg" fillOpacity={0.2} />
-                {bestSameRoast && <Radar name="同焙煎度ベスト" dataKey="sameRoastBest" fillOpacity={0.2} />}
-                {bestOriginNear && <Radar name="産地×近焙煎度ベスト" dataKey="originNearBest" fillOpacity={0.2} />}
-                <Legend />
-                <Tooltip />
-              </RadarChart>
-            <RadarChart data={[
-  { subject:'クリーンさ', value: Number(ratings.clean)      || 0 },
-  { subject:'風味',       value: Number(ratings.flavor)     || 0 },
-  { subject:'酸味',       value: Number(ratings.acidity)    || 0 },
-  { subject:'苦味',       value: Number(ratings.bitterness) || 0 },
-  { subject:'甘味',       value: Number(ratings.sweetness)  || 0 },
-  { subject:'コク',       value: Number(ratings.body)       || 0 },
-  { subject:'後味',       value: Number(ratings.aftertaste) || 0 },
-]}>
-          </div>
-        )}
+{/* レーダー：この豆の平均 / 同焙煎度ベスト / 同産地×近焙煎度ベスト */}
+{hasRadar && (
+  <div className="h-56">
+    <ResponsiveContainer>
+      <RadarChart data={radarData}>
+        <PolarGrid />
+        <PolarAngleAxis dataKey="subject" />
+        <PolarRadiusAxis angle={30} domain={[0, 10]} />
+        <Radar name="この豆の平均" dataKey="beanAvg" fillOpacity={0.2} />
+        {bestSameRoast && <Radar name="同焙煎度ベスト" dataKey="sameRoastBest" fillOpacity={0.2} />}
+        {bestOriginNear && <Radar name="産地×近焙煎度ベスト" dataKey="originNearBest" fillOpacity={0.2} />}
+        <Legend />
+        <Tooltip />
+      </RadarChart>
+    </ResponsiveContainer>
+  </div>
+)}
 
         {/* 豆ごとバー（抽出方法別平均） */}
         {hasStats && (
@@ -813,22 +804,22 @@ const RatingSelect = ({
 
         <div className="h-44">
           <ResponsiveContainer>
-            <RadarChart data={[
-              {subject:'クリーンさ', value: Number(form.ratings?.clean)||0},
-              {subject:'風味',     value: Number(form.ratings?.flavor)||0},
-              {subject:'酸味',     value: Number(form.ratings?.acidity)||0},
-              {subject:'苦味',     value: Number(form.ratings?.bitterness)||0},
-              {subject:'甘味',     value: Number(form.ratings?.sweetness)||0},
-              {subject:'コク',     value: Number(form.ratings?.body)||0},
-              {subject:'後味',     value: Number(form.ratings?.aftertaste)||0},
-            ]}>
-              <PolarGrid />
-              <PolarAngleAxis dataKey="subject" />
-              <PolarRadiusAxis angle={30} domain={[0,10]} />
-              <Radar name="now" dataKey="value" fillOpacity={0.3} />
-              <Tooltip />
-            </RadarChart>
-          </ResponsiveContainer>
+  <RadarChart data={[
+    {subject:'クリーンさ', value: Number(ratings.clean)      || 0},
+    {subject:'風味',       value: Number(ratings.flavor)     || 0},
+    {subject:'酸味',       value: Number(ratings.acidity)    || 0},
+    {subject:'苦味',       value: Number(ratings.bitterness) || 0},
+    {subject:'甘味',       value: Number(ratings.sweetness)  || 0},
+    {subject:'コク',       value: Number(ratings.body)       || 0},
+    {subject:'後味',       value: Number(ratings.aftertaste) || 0},
+  ]}>
+    <PolarGrid />
+    <PolarAngleAxis dataKey="subject" />
+    <PolarRadiusAxis angle={30} domain={[0,10]} />
+    <Radar name="now" dataKey="value" fillOpacity={0.3} />
+    <Tooltip />
+  </RadarChart>
+</ResponsiveContainer>
         </div>
 
         <div className="grid sm:grid-cols-3 gap-2 text-xs">
