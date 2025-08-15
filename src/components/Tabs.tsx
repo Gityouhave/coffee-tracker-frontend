@@ -11,22 +11,30 @@ export default function Tabs({
   tabs,
   storageKey = 'ct_last_tab',
   defaultId,
+  onChange,                // ← 追加
 }: {
   tabs: Tab[]
   storageKey?: string
   defaultId?: string
+  onChange?: (id: string) => void   // ← 追加
 }) {
   const first = defaultId || tabs[0]?.id
   const [active, setActive] = useState<string>(() => {
     const saved = typeof window !== 'undefined' ? localStorage.getItem(storageKey) : null
     return saved && tabs.some(t => t.id === saved) ? saved : first
   })
+  const mountedRef = React.useRef(false)
 
   useEffect(() => {
     localStorage.setItem(storageKey, active)
     // 切り替え時にトップ付近へ
     window.scrollTo({ top: 0, behavior: 'smooth' })
-  }, [active, storageKey])
+    if (mountedRef.current) {
+  onChange?.(active)
+} else {
+  mountedRef.current = true
+}
+  }, [active, storageKey, onChange]))
 
   return (
     <div className="space-y-4">
