@@ -85,18 +85,40 @@ const nearRoastSet = (level?: string|null) => {
 }
 
 export function DripForm({API, beans, onSaved}:{API:string; beans:any[]; onSaved:()=>void}){
-  const [form,setForm] = useState<any>({ ratings:{} })
-  const [derive, setDerive] = useState<any>(null)
-  const [beanStats, setBeanStats] = useState<any>(null)
-  // 既存の他の useState 定義と並べる
-const [dripDate, setDripDate] = useState<string>(
-  new Date().toISOString().slice(0, 10) // 今日の日付を初期値に
-)
-  // 先頭の state 群の近くに追加
+  // === ここから追記（ドラフト保存用） ===
+const DRAFT_RATINGS_KEY = 'ct_drip_draft_ratings';
+const loadDraftRatings = (): Record<string, string> => {
+  try {
+    const raw = localStorage.getItem(DRAFT_RATINGS_KEY);
+    if (!raw) return {};
+    const obj = JSON.parse(raw);
+    return (obj && typeof obj === 'object') ? obj : {};
+  } catch {
+    return {};
+  }
+};
+const saveDraftRatings = (r: Record<string, string>) => {
+  try {
+    localStorage.setItem(DRAFT_RATINGS_KEY, JSON.stringify(r));
+  } catch {}
+};
+// === ここまで追記 ===
+// ratings の型と初期値（localStorage から復元）
 const [ratings, setRatings] = useState<{
   overall?: string; clean?: string; flavor?: string; acidity?: string;
   bitterness?: string; sweetness?: string; body?: string; aftertaste?: string;
-}>({});
+}>(() => loadDraftRatings());
+
+// ratings が変わるたびに保存
+useEffect(() => {
+  // undefined を落として string のみ保存
+  const sanitized: Record<string, string> = {};
+  (['overall','clean','flavor','acidity','bitterness','sweetness','body','aftertaste'] as const).forEach(k => {
+    const v = ratings?.[k];
+    if (typeof v === 'string') sanitized[k] = v;
+  });
+  saveDraftRatings(sanitized);
+}, [ratings]);
   const [beanDrips, setBeanDrips] = useState<any[]>([])
   const [allDrips, setAllDrips] = useState<any[]>([])
   const [radarData, setRadarData] = useState<any[]>([])
@@ -162,9 +184,12 @@ const [ratings, setRatings] = useState<{
   }
 
   const handle = (k:string,v:any)=> setForm((s:any)=> ({...s,[k]:v}))
-const handleRating = React.useCallback((k: keyof typeof ratings, v: string) => {
-  setRatings((s) => ({ ...s, [k]: v }));   // ← form は触らない
-}, []);
+const handleRating = React.useCallback(
+  (k: 'overall'|'clean'|'flavor'|'acidity'|'bitterness'|'sweetness'|'body'|'aftertaste', v: string) => {
+    setRatings((s) => ({ ...s, [k]: v ?? '' }));
+  },
+  []
+);
 
   // 統一フィルタ＆ソート
   type SortKey = 'roast_date' | 'roast_level' | 'ppg' | 'name'
@@ -356,7 +381,14 @@ if (!form.brew_date) {
     const url = editingDripId ? `${API}/api/drips/${editingDripId}` : `${API}/api/drips`
     const method = editingDripId ? 'PUT' : 'POST'
     const r = await fetch(url, {method, headers:{'Content-Type':'application/json'}, body: JSON.stringify(payload)})
-    if(r.ok){ setForm({ratings:{}}); setEditingDripId(null); onSaved() }
+    if (r.ok) {
+  setForm({ratings:{}});
+  setEditingDripId(null);
+  // 送信完了時だけ ratings とドラフトをクリア
+  setRatings({});
+  saveDraftRatings({});
+  onSaved();
+}
   }
 
   // 表示ヘルパ
