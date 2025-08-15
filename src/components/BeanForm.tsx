@@ -29,38 +29,30 @@ type Bean = {
   in_stock:boolean
 }
 
+function pricePerG(b:Bean){
+  const p = Number(b.price_yen), w = Number(b.weight_g)
+  if (!Number.isFinite(p) || !Number.isFinite(w) || w<=0) return null
+  return p / w
+}
+
+/* ========== 慎重削除モーダル ========== */
 function DangerModal({
-  open, onClose,
-  bean,
-  onDelete
+  open, onClose, bean, onDelete
 }:{open:boolean; onClose:()=>void; bean:Bean|null; onDelete:(opts:{force:boolean})=>Promise<void>}){
   const [typed, setTyped] = useState('')
   const [force, setForce] = useState(false)
   const [busy, setBusy] = useState(false)
   const [err, setErr] = useState<string|null>(null)
 
-  useEffect(()=>{
-    if(open){
-      setTyped('')
-      setForce(false)
-      setBusy(false)
-      setErr(null)
-    }
-  },[open])
-
+  useEffect(()=>{ if(open){ setTyped(''); setForce(false); setBusy(false); setErr(null) }},[open])
   if(!open || !bean) return null
   const match = typed.trim() === bean.name.trim()
 
   const submit = async ()=>{
     setBusy(true); setErr(null)
-    try{
-      await onDelete({force})
-      onClose()
-    }catch(e:any){
-      setErr(String(e?.message || e || '削除に失敗しました'))
-    }finally{
-      setBusy(false)
-    }
+    try{ await onDelete({force}); onClose() }
+    catch(e:any){ setErr(String(e?.message || e || '削除に失敗しました')) }
+    finally{ setBusy(false) }
   }
 
   return (
@@ -70,37 +62,20 @@ function DangerModal({
           <div className="text-lg font-semibold">豆を削除</div>
           <div className="mt-1 text-sm text-gray-600">
             <div className="mb-2">対象：<span className="font-medium">{bean.name}</span></div>
-            <p className="mb-2">
-              この操作は取り消せません。誤操作防止のため、確認として
-              <span className="font-semibold"> 「{bean.name}」</span> と入力してください。
-            </p>
-            <p className="mb-2">
-              ドリップ記録が紐づいている場合、通常削除はエラーになります。
-              全てまとめて消す場合は「ドリップも一括削除」をチェックしてください。
-            </p>
+            <p className="mb-2">取り消せません。<b>{bean.name}</b> と入力して確認してください。</p>
+            <p className="mb-2">ドリップが紐づくと通常削除は失敗します。全削除はチェックを有効に。</p>
           </div>
         </div>
 
-        <input
-          className="w-full rounded border p-2"
-          placeholder={`${bean.name} と入力`}
-          value={typed}
-          onChange={e=>setTyped(e.target.value)}
-        />
-
+        <input className="w-full rounded border p-2" placeholder={`${bean.name} と入力`} value={typed} onChange={e=>setTyped(e.target.value)} />
         <label className="mt-3 flex items-center gap-2 text-sm">
           <input type="checkbox" checked={force} onChange={e=>setForce(e.target.checked)} />
           ドリップも一括削除（取り消し不可）
         </label>
-
         {err && <div className="mt-3 rounded bg-red-50 p-2 text-sm text-red-700">{err}</div>}
 
         <div className="mt-4 flex justify-end gap-2">
-          <button
-            className="rounded px-3 py-2 text-sm"
-            onClick={onClose}
-            disabled={busy}
-          >キャンセル</button>
+          <button className="rounded px-3 py-2 text-sm" onClick={onClose} disabled={busy}>キャンセル</button>
           <button
             className={`rounded px-4 py-2 text-sm font-semibold text-white ${match ? 'bg-red-600 hover:bg-red-700' : 'bg-red-300 cursor-not-allowed'}`}
             onClick={submit}
@@ -112,10 +87,62 @@ function DangerModal({
   )
 }
 
+/* ========== フィルター＆ソートバー ========== */
+function FilterBar({
+  query, setQuery,
+  stock, setStock,
+  originFilter, setOriginFilter,
+  sortKey, setSortKey,
+  sortDir, setSortDir
+}:{query:string; setQuery:(v:string)=>void;
+  stock:'all'|'in'|'out'; setStock:(v:'all'|'in'|'out')=>void;
+  originFilter:string[]; setOriginFilter:(v:string[])=>void;
+  sortKey:'name'|'roast'|'ppg'; setSortKey:(v:'name'|'roast'|'ppg')=>void;
+  sortDir:'asc'|'desc'; setSortDir:(v:'asc'|'desc')=>void;}){
+  return (
+    <div className="rounded border p-2 grid gap-2 md:grid-cols-4">
+      <input
+        className="rounded border p-2"
+        placeholder="検索（名前/産地/精製）"
+        value={query}
+        onChange={e=>setQuery(e.target.value)}
+      />
+      <select className="rounded border p-2" value={stock} onChange={e=>setStock(e.target.value as any)}>
+        <option value="all">在庫：全部</option>
+        <option value="in">在庫：あり</option>
+        <option value="out">在庫：なし</option>
+      </select>
+      <select
+        multiple
+        className="rounded border p-2 h-24"
+        value={originFilter}
+        onChange={e=>{
+          const v = Array.from(e.target.selectedOptions).map(o=>o.value)
+          setOriginFilter(v)
+        }}
+      >
+        {ORIGINS.filter(o=>o!=='不明').map(o=> <option key={o} value={o}>{o}</option>)}
+        <option value="不明">不明</option>
+      </select>
+      <div className="flex items-center gap-2">
+        <select className="rounded border p-2 flex-1" value={sortKey} onChange={e=>setSortKey(e.target.value as any)}>
+          <option value="name">ソート：名前</option>
+          <option value="roast">ソート：焙煎度</option>
+          <option value="ppg">ソート：g単価</option>
+        </select>
+        <button className="rounded border px-2 py-1" onClick={()=>setSortDir(sortDir==='asc'?'desc':'asc')}>
+          {sortDir==='asc'?'▲':'▼'}
+        </button>
+      </div>
+    </div>
+  )
+}
+
+/* ========== メイン ========== */
 export function BeanForm({API, onSaved}:{API:string; onSaved:()=>void}){
   const [form, setForm] = useState<any>({
     name:'', roast_level:'シティ', in_stock:true,
-    origins: [] as string[], // 複数産地（ブレンド対応）
+    origins: [] as string[],
     process:'不明', addl_process:'', variety:'', roast_date:'', price_yen:'', weight_g:'',
     taste_memo:'', brew_policy:''
   })
@@ -125,6 +152,13 @@ export function BeanForm({API, onSaved}:{API:string; onSaved:()=>void}){
   // 削除モーダル
   const [dangerOpen, setDangerOpen] = useState(false)
   const [dangerBean, setDangerBean] = useState<Bean|null>(null)
+
+  // フィルター/ソート状態
+  const [query, setQuery] = useState('')
+  const [stock, setStock] = useState<'all'|'in'|'out'>('all')
+  const [originFilter, setOriginFilter] = useState<string[]>([])
+  const [sortKey, setSortKey] = useState<'name'|'roast'|'ppg'>('name')
+  const [sortDir, setSortDir] = useState<'asc'|'desc'>('asc')
 
   const handle = (k:string,v:any)=> setForm((s:any)=> ({...s,[k]:v}))
 
@@ -140,7 +174,6 @@ export function BeanForm({API, onSaved}:{API:string; onSaved:()=>void}){
       name: b.name || '',
       roast_level: b.roast_level || 'シティ',
       in_stock: !!b.in_stock,
-      // 既存は文字列保管の想定 → 配列化
       origins: (b.origin ? String(b.origin).split(',').map((s:string)=>s.trim()).filter(Boolean) : []),
       process: b.process || '不明',
       addl_process: b.addl_process || '',
@@ -161,7 +194,7 @@ export function BeanForm({API, onSaved}:{API:string; onSaved:()=>void}){
     })
   }
 
-  // 必須チェック（追加処理・品種・テイスト・方針 以外は必須）
+  // 必須チェック
   const validate = ()=>{
     if (!form.name) return '豆の名前'
     if (!form.roast_level) return '焙煎度'
@@ -182,7 +215,7 @@ export function BeanForm({API, onSaved}:{API:string; onSaved:()=>void}){
       name: form.name,
       roast_level: form.roast_level,
       in_stock: !!form.in_stock,
-      origin: form.origins.join(','), // ← 複数産地を文字列で保存（ブレンド対応）
+      origin: form.origins.join(','), // 保存は文字列
       process: form.process,
       addl_process: form.addl_process || null,
       variety: form.variety || null,
@@ -206,28 +239,63 @@ export function BeanForm({API, onSaved}:{API:string; onSaved:()=>void}){
     clearForm()
   }
 
-  // 削除クリック → モーダル表示
-  const askDelete = (b:Bean)=>{
-    setDangerBean(b)
-    setDangerOpen(true)
-  }
-
-  // モーダルから呼ばれる実削除
+  // 削除
+  const askDelete = (b:Bean)=>{ setDangerBean(b); setDangerOpen(true) }
   const doDelete = async ({force}:{force:boolean})=>{
     if(!dangerBean) return
     const url = `${API}/api/beans/${dangerBean.id}${force ? '?force=1' : ''}`
     const r = await fetch(url, { method:'DELETE' })
-    if(!r.ok){
-      const body = await r.text().catch(()=> '')
-      throw new Error(`HTTP ${r.status}\n${body}`)
-    }
+    if(!r.ok){ throw new Error(`HTTP ${r.status}\n${await r.text().catch(()=> '')}`) }
     await loadBeans()
-    // 編集中に対象を消したらフォームもリセット
     if(editingId === dangerBean.id) clearForm()
   }
 
+  // 一覧のフィルタ＆ソート
+  const filtered = useMemo(()=>{
+    let list = beans.slice()
+
+    // キーワード（名前／産地／精製）
+    const q = query.trim()
+    if(q){
+      const lc = q.toLowerCase()
+      list = list.filter(b=>
+        (b.name||'').toLowerCase().includes(lc) ||
+        (b.origin||'').toLowerCase().includes(lc) ||
+        (b.process||'').toLowerCase().includes(lc)
+      )
+    }
+
+    // 在庫
+    if(stock==='in') list = list.filter(b=>b.in_stock)
+    if(stock==='out') list = list.filter(b=>!b.in_stock)
+
+    // 産地フィルタ（いずれか一致）
+    if(originFilter.length){
+      list = list.filter(b=>{
+        const parts = String(b.origin||'').split(',').map(s=>s.trim())
+        return originFilter.some(o=>parts.includes(o))
+      })
+    }
+
+    // ソート
+    list.sort((a,b)=>{
+      let av:any, bv:any
+      if (sortKey==='name'){ av=a.name; bv=b.name }
+      else if (sortKey==='roast'){ av=ROASTS.indexOf(a.roast_level as any); bv=ROASTS.indexOf(b.roast_level as any) }
+      else { // ppg
+        av = pricePerG(a) ?? Infinity
+        bv = pricePerG(b) ?? Infinity
+      }
+      const cmp = (av>bv?1:av<bv?-1:0)
+      return sortDir==='asc'? cmp : -cmp
+    })
+
+    return list
+  },[beans, query, stock, originFilter, sortKey, sortDir])
+
   return (
     <div className="space-y-4">
+      {/* 登録フォーム */}
       <form onSubmit={submit} className="space-y-2">
         <div className="grid grid-cols-2 gap-2">
           <input className="border rounded p-2" placeholder="豆の名前" value={form.name} onChange={e=>handle('name',e.target.value)} required />
@@ -236,7 +304,7 @@ export function BeanForm({API, onSaved}:{API:string; onSaved:()=>void}){
           </select>
         </div>
 
-        {/* 産地：複数選択（ブレンド対応） */}
+        {/* 産地（複数） */}
         <div>
           <label className="text-sm text-gray-600">産地（複数可・必須）</label>
           <select
@@ -253,7 +321,7 @@ export function BeanForm({API, onSaved}:{API:string; onSaved:()=>void}){
             <option value="不明">不明</option>
           </select>
 
-          {/* 選択した産地のセオリー（情報があるものだけ表示） */}
+          {/* 産地セオリー（あるものだけ） */}
           {form.origins?.length>0 && (
             <div className="mt-1 text-xs text-gray-600 space-y-1">
               {form.origins.map((o:string)=> ORIGIN_THEORIES[o] ? (
@@ -264,11 +332,9 @@ export function BeanForm({API, onSaved}:{API:string; onSaved:()=>void}){
         </div>
 
         <div className="grid grid-cols-2 gap-2">
-          {/* 精製（必須） */}
           <select className="border rounded p-2" value={form.process} onChange={e=>handle('process',e.target.value)} required>
             {PROCESS_OPTIONS.map(x=> <option key={x} value={x}>{x}</option>)}
           </select>
-          {/* 追加処理（任意） */}
           <select className="border rounded p-2" value={form.addl_process} onChange={e=>handle('addl_process',e.target.value)}>
             {ADDL_PROCESS_OPTIONS.map(x=> <option key={x} value={x}>{x||'追加処理なし'}</option>)}
           </select>
@@ -297,37 +363,43 @@ export function BeanForm({API, onSaved}:{API:string; onSaved:()=>void}){
         </div>
       </form>
 
+      {/* フィルター＆ソート */}
+      <FilterBar
+        query={query} setQuery={setQuery}
+        stock={stock} setStock={setStock}
+        originFilter={originFilter} setOriginFilter={setOriginFilter}
+        sortKey={sortKey} setSortKey={setSortKey}
+        sortDir={sortDir} setSortDir={setSortDir}
+      />
+
       {/* 一覧（編集／削除） */}
-      {beans.length>0 && (
+      {filtered.length>0 ? (
         <div className="text-sm">
-          <div className="mb-1 font-semibold">登録済みの豆</div>
+          <div className="mb-1 font-semibold">登録済みの豆（{filtered.length}件）</div>
           <ul className="space-y-1">
-            {beans.map(b=>(
-              <li key={b.id} className="flex items-center justify-between gap-3 rounded border p-2">
-                <span className="truncate">
-                  {b.name} / {b.origin ?? '-'} / {b.roast_level} / 在庫:{b.in_stock?'あり':'なし'}
-                </span>
-                <div className="flex shrink-0 gap-2">
-                  <button className="rounded border px-2 py-1" onClick={()=>startEdit(b)}>編集</button>
-                  <button
-                    className="rounded border border-red-500 px-2 py-1 text-red-600 hover:bg-red-50"
-                    onClick={()=>askDelete(b)}
-                    title="削除（慎重に）"
-                  >削除</button>
-                </div>
-              </li>
-            ))}
+            {filtered.map(b=>{
+              const ppg = pricePerG(b)
+              return (
+                <li key={b.id} className="flex items-center justify-between gap-3 rounded border p-2">
+                  <span className="truncate">
+                    {b.name} / {b.origin ?? '-'} / {b.roast_level} / 在庫:{b.in_stock?'あり':'なし'}
+                    {ppg!=null && <span className="ml-2 text-xs text-gray-600">g単価: {ppg.toFixed(2)} 円/g</span>}
+                  </span>
+                  <div className="flex shrink-0 gap-2">
+                    <button className="rounded border px-2 py-1" onClick={()=>startEdit(b)}>編集</button>
+                    <button className="rounded border border-red-500 px-2 py-1 text-red-600 hover:bg-red-50" onClick={()=>askDelete(b)}>削除</button>
+                  </div>
+                </li>
+              )
+            })}
           </ul>
         </div>
+      ) : (
+        <div className="rounded border p-3 text-sm text-gray-600">該当する豆がありません。</div>
       )}
 
       {/* 慎重削除モーダル */}
-      <DangerModal
-        open={dangerOpen}
-        bean={dangerBean}
-        onClose={()=>setDangerOpen(false)}
-        onDelete={doDelete}
-      />
+      <DangerModal open={dangerOpen} bean={dangerBean} onClose={()=>setDangerOpen(false)} onDelete={doDelete}/>
     </div>
   )
 }
