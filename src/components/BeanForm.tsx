@@ -2,6 +2,8 @@
 import React, { useEffect, useMemo, useState } from 'react'
 import { ORIGINS } from '../constants/origins'
 import { ORIGIN_THEORIES } from '../constants/originTheories'
+import { filterSortBeans, beanOptionLabel } from '../utils/beanFilters'
+import { ORIGINS } from '../constants/origins'
 
 const PROCESS_OPTIONS = [
   '不明','ナチュラル','ウォッシュド','ハニー','レッドハニー','イエローハニー','ホワイトハニー','スマトラ'
@@ -147,6 +149,25 @@ export function BeanForm({API, onSaved}:{API:string; onSaved:()=>void}){
     taste_memo:'', brew_policy:''
   })
   const [beans, setBeans] = useState<Bean[]>([])
+  type SortKey = 'roast_date' | 'roast_level' | 'ppg' | 'name'
+type StockFilter = 'all' | 'in' | 'out'
+const LS = { q:'ct_beans_q', stock:'ct_beans_stock', origins:'ct_beans_origins', sort:'ct_beans_sort' }
+
+const [q, setQ] = useState<string>(()=> localStorage.getItem(LS.q) || '')
+const [stock, setStock] = useState<StockFilter>(()=> (localStorage.getItem(LS.stock) as StockFilter) || 'all')
+const [originFilter, setOriginFilter] = useState<string[]>(()=>{
+  try{ return JSON.parse(localStorage.getItem(LS.origins) || '[]') }catch{ return [] }
+})
+const [sort, setSort] = useState<SortKey>(()=> (localStorage.getItem(LS.sort) as SortKey) || 'roast_date')
+
+useEffect(()=>{ localStorage.setItem(LS.q, q) },[q])
+useEffect(()=>{ localStorage.setItem(LS.stock, stock) },[stock])
+useEffect(()=>{ localStorage.setItem(LS.origins, JSON.stringify(originFilter)) },[originFilter])
+useEffect(()=>{ localStorage.setItem(LS.sort, sort) },[sort])
+
+const filteredBeans = React.useMemo(()=>{
+  return filterSortBeans(beans, { q, stock, origins: originFilter, sort })
+},[beans, q, stock, originFilter, sort])
   const [editingId, setEditingId] = useState<number|null>(null)
 
   // 削除モーダル
@@ -185,6 +206,30 @@ export function BeanForm({API, onSaved}:{API:string; onSaved:()=>void}){
       brew_policy: b.brew_policy || ''
     })
   }
+  const patchBean = async (id:number, body:any)=>{
+  await fetch(`${API}/api/beans/${id}`, {
+    method:'PATCH', headers:{'Content-Type':'application/json'},
+    body: JSON.stringify(body)
+  })
+  await loadBeans()
+}
+
+const toggleStock = async (b:any)=> {
+  await patchBean(b.id, { in_stock: !b.in_stock })
+}
+const updateRoastDate = async (b:any, iso:string)=> {
+  await patchBean(b.id, { roast_date: iso || null })
+}
+const deleteBean = async (b:any)=>{
+  if(!confirm(`豆「${b.name}」を削除しますか？\n※紐づくドリップがある場合は削除できません`)) return
+  const r = await fetch(`${API}/api/beans/${b.id}`, { method:'DELETE' })
+  if(!r.ok){
+    const msg = await r.json().catch(()=>({error:'削除に失敗'}))
+    alert(msg.error || '削除に失敗')
+  }else{
+    await loadBeans()
+  }
+}
   const clearForm = ()=>{
     setEditingId(null)
     setForm({
@@ -363,14 +408,44 @@ export function BeanForm({API, onSaved}:{API:string; onSaved:()=>void}){
         </div>
       </form>
 
-      {/* フィルター＆ソート */}
-      <FilterBar
-        query={query} setQuery={setQuery}
-        stock={stock} setStock={setStock}
-        originFilter={originFilter} setOriginFilter={setOriginFilter}
-        sortKey={sortKey} setSortKey={setSortKey}
-        sortDir={sortDir} setSortDir={setSortDir}
-      />
+      {/* 統一ソート・フィルタ */}
+<section className="p-2 bg-gray-50 rounded border space-y-2 text-sm">
+  <div className="flex flex-col gap-2 sm:flex-row sm:items-end">
+    <div className="flex-1">
+      <label className="block text-xs text-gray-600">フリーワード検索</label>
+      <input className="border rounded p-2 w-full" placeholder="名前・産地・品種・精製など"
+             value={q} onChange={e=>setQ(e.target.value)} />
+    </div>
+    <div>
+      <label className="block text-xs text-gray-600">在庫</label>
+      <select className="border rounded p-2" value={stock} onChange={e=>setStock(e.target.value as any)}>
+        <option value="all">全部</option>
+        <option value="in">あり</option>
+        <option value="out">なし</option>
+      </select>
+    </div>
+    <div className="min-w-[220px]">
+      <label className="block text-xs text-gray-600">産地フィルタ（複数可）</label>
+      <select multiple className="border rounded p-2 w-full h-24"
+              value={originFilter}
+              onChange={e=>{
+                const v = Array.from(e.target.selectedOptions).map(o=>o.value)
+                setOriginFilter(v)
+              }}>
+        {ORIGINS.map(o=> <option key={o} value={o}>{o}</option>)}
+      </select>
+    </div>
+    <div>
+      <label className="block text-xs text-gray-600">ソート（昇順）</label>
+      <select className="border rounded p-2" value={sort} onChange={e=>setSort(e.target.value as any)}>
+        <option value="roast_date">焙煎日</option>
+        <option value="roast_level">焙煎度</option>
+        <option value="ppg">g単価</option>
+        <option value="name">名前</option>
+      </select>
+    </div>
+  </div>
+</section>
 
       {/* 一覧（編集／削除） */}
       {filtered.length>0 ? (
@@ -381,14 +456,36 @@ export function BeanForm({API, onSaved}:{API:string; onSaved:()=>void}){
               const ppg = pricePerG(b)
               return (
                 <li key={b.id} className="flex items-center justify-between gap-3 rounded border p-2">
-                  <span className="truncate">
-                    {b.name} / {b.origin ?? '-'} / {b.roast_level} / 在庫:{b.in_stock?'あり':'なし'}
-                    {ppg!=null && <span className="ml-2 text-xs text-gray-600">g単価: {ppg.toFixed(2)} 円/g</span>}
-                  </span>
-                  <div className="flex shrink-0 gap-2">
-                    <button className="rounded border px-2 py-1" onClick={()=>startEdit(b)}>編集</button>
-                    <button className="rounded border border-red-500 px-2 py-1 text-red-600 hover:bg-red-50" onClick={()=>askDelete(b)}>削除</button>
-                  </div>
+                  <span className="truncate">{beanOptionLabel(b)}</span>
+<div className="flex items-center gap-2">
+  <label className="text-xs inline-flex items-center gap-1">
+    在庫:
+    <button
+      type="button"
+      onClick={()=>toggleStock(b)}
+      className={`px-2 py-1 rounded border ${b.in_stock ? 'bg-green-50' : 'bg-gray-50'}`}
+      title="クリックで在庫トグル"
+    >
+      {b.in_stock ? 'あり' : 'なし'}
+    </button>
+  </label>
+
+  <input
+    type="date"
+    className="border rounded p-1 text-xs"
+    value={b.roast_date || ''}
+    onChange={e=>updateRoastDate(b, e.target.value)}
+    title="焙煎日を直接編集"
+  />
+
+  <button className="rounded border px-2 py-1" onClick={()=>startEdit(b)}>編集</button>
+  <button
+    className="rounded border border-red-500 px-2 py-1 text-red-600 hover:bg-red-50"
+    onClick={()=>askDelete(b)}
+  >
+    削除
+  </button>
+</div>
                 </li>
               )
             })}
