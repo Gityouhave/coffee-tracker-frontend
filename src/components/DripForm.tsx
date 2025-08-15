@@ -84,14 +84,18 @@ const nearRoastSet = (level?: string|null) => {
   return new Set([ROASTS[idx-1], ROASTS[idx], ROASTS[idx+1]].filter(Boolean))
 }
 
-// --- ここから追加 ---
-const [form, setForm] = useState<any>({ ratings:{} })
-const [derive, setDerive] = useState<any>(null)
-const [beanStats, setBeanStats] = useState<any>(null)
-const [dripDate, setDripDate] = useState<string>(
-  new Date().toISOString().slice(0, 10)
-)
-// --- ここまで追加 ---
+// ここまではユーティリティ類（nearRoastSet まで）
+
+export function DripForm({API, beans, onSaved}:{API:string; beans:any[]; onSaved:()=>void}){
+
+  // --- ここから（コンポーネント内） ---
+  const [form, setForm] = useState<any>({ ratings:{} })
+  const [derive, setDerive] = useState<any>(null)
+  const [beanStats, setBeanStats] = useState<any>(null)
+  const [dripDate, setDripDate] = useState<string>(
+    new Date().toISOString().slice(0, 10)
+  )
+  // --- ここまで（コンポーネント内） ---
 const DRAFT_RATINGS_KEY = 'ct_drip_draft_ratings';
 const loadDraftRatings = (): Record<string, string> => {
   try {
