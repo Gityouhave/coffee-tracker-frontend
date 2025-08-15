@@ -413,7 +413,10 @@ const RatingSelect = ({
       <select
         className="border rounded p-2 text-sm"
         value={val}                              // ← 常に文字列
-        onChange={(e)=> handleRating(k, e.target.value)} // ← 文字列で保存
+        onChange={(e) => {
+  console.log('handleRating', k, e.target.value);   // ← これが毎回出るか確認
+  handleRating(k, e.target.value);
+}}
       >
         <option value="">未選択</option>
         <option value="10">5 とても良い</option>
