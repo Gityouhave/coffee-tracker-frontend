@@ -88,10 +88,6 @@ export function DripForm({API, beans, onSaved}:{API:string; beans:any[]; onSaved
   const [form,setForm] = useState<any>({ ratings:{} })
   const [derive, setDerive] = useState<any>(null)
   const [beanStats, setBeanStats] = useState<any>(null)
-  // 既存の他の useState 定義と並べる
-const [dripDate, setDripDate] = useState<string>(
-  new Date().toISOString().slice(0, 10) // 今日の日付を初期値に
-)
   const [beanDrips, setBeanDrips] = useState<any[]>([])
   const [allDrips, setAllDrips] = useState<any[]>([])
   const [radarData, setRadarData] = useState<any[]>([])
@@ -304,7 +300,7 @@ const [dripDate, setDripDate] = useState<string>(
 
   const validate = ()=>{
     if(!form.bean_id) return '使用豆'
-    
+    if(!form.brew_date) return 'ドリップ日'
     if(form.grind==='' || form.grind==null) return '挽き目'
     if(form.water_temp_c==='' || form.water_temp_c==null) return '湯温(℃)'
     if(form.dose_g==='' || form.dose_g==null) return '豆(g)'
@@ -318,14 +314,10 @@ const [dripDate, setDripDate] = useState<string>(
   const submit = async (e:any)=>{
     e.preventDefault()
     const miss = validate()
-    // brew_date が空なら dripDate を入れる
-if (!form.brew_date) {
-  form.brew_date = dripDate || new Date().toISOString().slice(0, 10)
-}
     if(miss){ alert(`必須項目が不足：${miss}`); return }
     const payload = {
-  bean_id: parseInt(form.bean_id),
-  brew_date: form.brew_date || dripDate || new Date().toISOString().slice(0, 10),
+      bean_id: parseInt(form.bean_id),
+      brew_date: form.brew_date,
       grind: form.grind? parseFloat(form.grind): null,
       water_temp_c: form.water_temp_c? parseFloat(form.water_temp_c): null,
       dose_g: form.dose_g? parseFloat(form.dose_g): null,
@@ -382,43 +374,7 @@ if (!form.brew_date) {
     const notes = cs.map(c => ORIGIN_THEORIES[c] ? `${c}：${ORIGIN_THEORIES[c]}` : '').filter(Boolean)
     return notes.length ? notes.join(' ／ ') : '—'
   }
-  
-  // 5段階（内部は 10 / 8 / 6 / 4 / 2 を保存） ← すべて「文字列」で扱う
-const RATING_OPTIONS5: { value: string; label: string }[] = [
-  { value: '10', label: '5 とても良い' },
-  { value: '8',  label: '4 良い' },
-  { value: '6',  label: '3 ふつう' },
-  { value: '4',  label: '2 やや弱い' },
-  { value: '2',  label: '1 弱い' },
-];
 
-/** 味評価用の5段階セレクト（値は必ず「文字列」を保持） */
-const RatingSelect = ({
-  k, label,
-}: {
-  k: 'overall'|'clean'|'flavor'|'acidity'|'bitterness'|'sweetness'|'body'|'aftertaste';
-  label: string;
-}) => {
-  // ← ★ ここがポイント：必ず String(...) で「文字列」として扱う
-  const val = String((form?.ratings?.[k] ?? ''));
-
-  return (
-    <div className="flex flex-col gap-1">
-      <label className="text-xs text-gray-600">{label}</label>
-      <select
-        className="border rounded p-2 text-sm"
-        value={val}                                   // ← 文字列
-        onChange={(e) => handleRating(k, e.target.value)} // ← 文字列のまま保存
-      >
-        <option value="">未選択</option>
-        {RATING_OPTIONS5.map(opt => (
-          <option key={opt.value} value={opt.value}>{opt.label}</option>
-        ))}
-      </select>
-    </div>
-  );
-};
-  
   // 指標切替
   const yAccessor = useMemo(()=>({
     key: `ratings.${yMetric}`,
@@ -494,15 +450,7 @@ const RatingSelect = ({
             <option key={b.id} value={b.id}>{beanOptionLabel(b)}</option>
           ))}
         </select>
-        <input
-  className="border rounded p-2"
-  type="date"
-  value={form.brew_date || dripDate}
-  onChange={(e) => {
-    setDripDate(e.target.value);
-    handle('brew_date', e.target.value);
-  }}
-/>
+        <input className="border rounded p-2" type="date" value={form.brew_date||''} onChange={e=>handle('brew_date',e.target.value)} required />
       </div>
 
       {(last || bestPatterns.length>0) && (
@@ -735,24 +683,11 @@ const RatingSelect = ({
       <textarea className="w-full border rounded p-2" placeholder="手法メモ" value={form.method_memo||''} onChange={e=>handle('method_memo',e.target.value)} />
       <textarea className="w-full border rounded p-2" placeholder="感想メモ" value={form.note_memo||''} onChange={e=>handle('note_memo',e.target.value)} />
 
-      {/* 味の入力（5段階セレクト） */}
-<div className="space-y-3">
-  {/* まず全体（独立行） */}
-  <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-2">
-    <RatingSelect k="overall" label="全体（overall）" />
-  </div>
-
-  {/* 残り7項目を並列表示 */}
-  <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
-    <RatingSelect k="clean"      label="クリーンさ（clean）" />
-    <RatingSelect k="flavor"     label="風味（flavor）" />
-    <RatingSelect k="acidity"    label="酸味（acidity）" />
-    <RatingSelect k="bitterness" label="苦味（bitterness）" />
-    <RatingSelect k="sweetness"  label="甘味（sweetness）" />
-    <RatingSelect k="body"       label="コク（body）" />
-    <RatingSelect k="aftertaste" label="後味（aftertaste）" />
-  </div>
-</div>
+      <div className="grid grid-cols-4 gap-2 text-sm">
+        {['clean','flavor','acidity','bitterness','sweetness','body','aftertaste','overall'].map(k=> (
+          <input key={k} className="border rounded p-2" placeholder={`${k} 1-10`} value={form.ratings?.[k]||''} onChange={e=>handleRating(k,e.target.value)} />
+        ))}
+      </div>
 
       {/* 価格見積（豆の単価 × 使用量） */}
       {(() => {
