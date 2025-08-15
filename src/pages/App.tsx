@@ -38,6 +38,17 @@ export default function App() {
     fetchStats()
   }, [])
 
+  // BeanForm 側で localStorage に書かれる "ct_beans_dirty" を監視して豆を再取得
+useEffect(() => {
+  const onDirty = (e: StorageEvent) => {
+    if (e.key === 'ct_beans_dirty') {
+      fetchBeans()
+    }
+  }
+  window.addEventListener('storage', onDirty)
+  return () => window.removeEventListener('storage', onDirty)
+}, [])
+
   const dashHeader = (
     <header className="flex items-baseline justify-between">
       <h1 className="text-2xl font-bold">Coffee Tracker ☕</h1>
