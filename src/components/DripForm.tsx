@@ -382,34 +382,43 @@ if (!form.brew_date) {
     const notes = cs.map(c => ORIGIN_THEORIES[c] ? `${c}：${ORIGIN_THEORIES[c]}` : '').filter(Boolean)
     return notes.length ? notes.join(' ／ ') : '—'
   }
+  
+  // 5段階（内部は 10 / 8 / 6 / 4 / 2 を保存） ← すべて「文字列」で扱う
+const RATING_OPTIONS5: { value: string; label: string }[] = [
+  { value: '10', label: '5 とても良い' },
+  { value: '8',  label: '4 良い' },
+  { value: '6',  label: '3 ふつう' },
+  { value: '4',  label: '2 やや弱い' },
+  { value: '2',  label: '1 弱い' },
+];
 
-  /** 1–10保存 ↔ 1–5表示 の相互変換 */
-const to5step = (v?: any) =>
-  Number.isFinite(Number(v)) ? Math.min(5, Math.max(1, Math.round(Number(v) / 2))) : '';
-
-const from5step = (v5: string) =>
-  v5 === '' ? '' : String(Number(v5) * 2);
-
-/** 5段階セレクトの共通コンポーネント */
+/** 味評価用の5段階セレクト（値は必ず「文字列」を保持） */
 const RatingSelect = ({
   k, label,
-}: { k: 'overall'|'clean'|'flavor'|'acidity'|'bitterness'|'sweetness'|'body'|'aftertaste'; label: string }) => (
-  <div className="flex flex-col gap-1">
-    <label className="text-xs text-gray-600">{label}</label>
-    <select
-      className="border rounded p-2 text-sm"
-      value={to5step((form as any).ratings?.[k])}
-      onChange={(e)=> handleRating(k, from5step(e.target.value))}
-    >
-      <option value="">—</option>
-      <option value="1">1（弱い）</option>
-      <option value="2">2</option>
-      <option value="3">3（中）</option>
-      <option value="4">4</option>
-      <option value="5">5（強い）</option>
-    </select>
-  </div>
-);
+}: {
+  k: 'overall'|'clean'|'flavor'|'acidity'|'bitterness'|'sweetness'|'body'|'aftertaste';
+  label: string;
+}) => {
+  // ← ★ ここがポイント：必ず String(...) で「文字列」として扱う
+  const val = String((form?.ratings?.[k] ?? ''));
+
+  return (
+    <div className="flex flex-col gap-1">
+      <label className="text-xs text-gray-600">{label}</label>
+      <select
+        className="border rounded p-2 text-sm"
+        value={val}                                   // ← 文字列
+        onChange={(e) => handleRating(k, e.target.value)} // ← 文字列のまま保存
+      >
+        <option value="">未選択</option>
+        {RATING_OPTIONS5.map(opt => (
+          <option key={opt.value} value={opt.value}>{opt.label}</option>
+        ))}
+      </select>
+    </div>
+  );
+};
+  
   // 指標切替
   const yAccessor = useMemo(()=>({
     key: `ratings.${yMetric}`,
