@@ -324,8 +324,8 @@ if (!form.brew_date) {
 }
     if(miss){ alert(`必須項目が不足：${miss}`); return }
     const payload = {
-      bean_id: parseInt(form.bean_id),
-      brew_date: form.brew_date,
+  bean_id: parseInt(form.bean_id),
+  brew_date: form.brew_date || dripDate || new Date().toISOString().slice(0, 10),
       grind: form.grind? parseFloat(form.grind): null,
       water_temp_c: form.water_temp_c? parseFloat(form.water_temp_c): null,
       dose_g: form.dose_g? parseFloat(form.dose_g): null,
