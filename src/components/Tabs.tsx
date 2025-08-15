@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState } from 'react'
+import React, { useEffect, useState, useRef } from 'react'
 
 type Tab = {
   id: string
@@ -23,20 +23,29 @@ export default function Tabs({
     const saved = typeof window !== 'undefined' ? localStorage.getItem(storageKey) : null
     return saved && tabs.some(t => t.id === saved) ? saved : first
   })
-  const mountedRef = React.useRef(false)
+  const mountedRef = useRef(false)         // 初回マウント判定
+const userClickRef = useRef(false)       // 直前の切替が“ユーザークリック”かどうか
 
     useEffect(() => {
-    localStorage.setItem(storageKey, active)
-    // 切り替え時にトップ付近へ
-    window.scrollTo({ top: 0, behavior: 'smooth' })
+  // 復元用に保存
+  localStorage.setItem(storageKey, active)
 
-    if (mountedRef.current) {
-      // タブ切替時のフック：親から渡された onChange を呼ぶ
-      onChange?.(active)
-    } else {
-      mountedRef.current = true
-    }
-  }, [active, storageKey, onChange])
+  if (!mountedRef.current) {
+    // 初回はスクロールさせない
+    mountedRef.current = true
+    onChange?.(active)           // 初回にも通知したくなければ、この行を消してOK
+    return
+  }
+
+  // タブ切替の通知
+  onChange?.(active)
+
+  // “ユーザーがタブボタンをクリックしたとき” だけスクロール
+  if (userClickRef.current) {
+    userClickRef.current = false
+    window.scrollTo({ top: 0, behavior: 'smooth' })
+  }
+}, [active, storageKey, onChange])
 
   return (
     <div className="space-y-4">
@@ -47,7 +56,7 @@ export default function Tabs({
             return (
               <button
                 key={t.id}
-                onClick={() => setActive(t.id)}
+                onClick={() => { userClickRef.current = true; setActive(t.id) }}
                 className={
                   'whitespace-nowrap px-3 py-2 rounded-full text-sm border ' +
                   (is
