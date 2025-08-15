@@ -63,24 +63,30 @@ useEffect(() => {
       {dashHeader}
 
       <Tabs
-        storageKey="ct_last_tab"
+          storageKey="ct_last_tab"
+  onChange={(id) => {
+    if (id === 'beans')   fetchBeans()
+    if (id === 'drip')    fetchBeans()           // ドリップ記録に入った時に最新豆を取得
+    if (id === 'history') { fetchDrips(); fetchStats(); }
+    if (id === 'stats')   fetchStats()
+  }}
         tabs={[
           {
-            id: 'beans',
-            label: '豆 管理',
-            content: (
-              <div className="grid lg:grid-cols-2 gap-6">
-                <section className="p-4 bg-white rounded-2xl shadow">
-                  <h2 className="font-semibold mb-2">1) コーヒー豆を登録・編集</h2>
-                  <BeanForm API={API} onSaved={fetchBeans} />
-                </section>
+      id: 'beans',
+      label: '豆 管理',
+      content: (
+        <div className="grid lg:grid-cols-2 gap-6">
+          <section className="p-4 bg-white rounded-2xl shadow">
+            <h2 className="font-semibold mb-2">1) コーヒー豆を登録・編集</h2>
+            <BeanForm API={API} onSaved={fetchBeans} />
+          </section>
 
-                <section className="p-4 bg-white rounded-2xl shadow">
-                  <h3 className="font-semibold mb-2">欠落産地（在庫基準）</h3>
-                  <MissingOrigins API={API} />
-                </section>
-              </div>
-            ),
+          <section className="p-4 bg-white rounded-2xl shadow">
+            <h3 className="font-semibold mb-2">欠落産地（在庫基準）</h3>
+            <MissingOrigins API={API} />
+          </section>
+        </div>
+      ),
           },
           {
             id: 'drip',
