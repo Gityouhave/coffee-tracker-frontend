@@ -385,11 +385,11 @@ if (!form.brew_date) {
   
   // 5段階（内部は 10 / 8 / 6 / 4 / 2 を保存） ← すべて「文字列」で扱う
 const RATING_OPTIONS5: { value: string; label: string }[] = [
-  { value: '10', label: '5 とても良い' },
-  { value: '8',  label: '4 良い' },
-  { value: '6',  label: '3 ふつう' },
-  { value: '4',  label: '2 やや弱い' },
-  { value: '2',  label: '1 弱い' },
+  { value: '10', label: '5' },
+  { value: '8',  label: '4' },
+  { value: '6',  label: '3' },
+  { value: '4',  label: '2' },
+  { value: '2',  label: '1' },
 ];
 
 /** 味評価用の5段階セレクト（値は必ず「文字列」を保持） */
