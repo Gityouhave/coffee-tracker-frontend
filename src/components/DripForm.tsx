@@ -88,6 +88,10 @@ export function DripForm({API, beans, onSaved}:{API:string; beans:any[]; onSaved
   const [form,setForm] = useState<any>({ ratings:{} })
   const [derive, setDerive] = useState<any>(null)
   const [beanStats, setBeanStats] = useState<any>(null)
+  // 既存の他の useState 定義と並べる
+const [dripDate, setDripDate] = useState<string>(
+  new Date().toISOString().slice(0, 10) // 今日の日付を初期値に
+)
   const [beanDrips, setBeanDrips] = useState<any[]>([])
   const [allDrips, setAllDrips] = useState<any[]>([])
   const [radarData, setRadarData] = useState<any[]>([])
@@ -300,7 +304,7 @@ export function DripForm({API, beans, onSaved}:{API:string; beans:any[]; onSaved
 
   const validate = ()=>{
     if(!form.bean_id) return '使用豆'
-    if(!form.brew_date) return 'ドリップ日'
+    
     if(form.grind==='' || form.grind==null) return '挽き目'
     if(form.water_temp_c==='' || form.water_temp_c==null) return '湯温(℃)'
     if(form.dose_g==='' || form.dose_g==null) return '豆(g)'
@@ -314,6 +318,10 @@ export function DripForm({API, beans, onSaved}:{API:string; beans:any[]; onSaved
   const submit = async (e:any)=>{
     e.preventDefault()
     const miss = validate()
+    // brew_date が空なら dripDate を入れる
+if (!form.brew_date) {
+  form.brew_date = dripDate || new Date().toISOString().slice(0, 10)
+}
     if(miss){ alert(`必須項目が不足：${miss}`); return }
     const payload = {
       bean_id: parseInt(form.bean_id),
@@ -450,7 +458,15 @@ export function DripForm({API, beans, onSaved}:{API:string; beans:any[]; onSaved
             <option key={b.id} value={b.id}>{beanOptionLabel(b)}</option>
           ))}
         </select>
-        <input className="border rounded p-2" type="date" value={form.brew_date||''} onChange={e=>handle('brew_date',e.target.value)} required />
+        <input
+  className="border rounded p-2"
+  type="date"
+  value={form.brew_date || dripDate}
+  onChange={(e) => {
+    setDripDate(e.target.value);
+    handle('brew_date', e.target.value);
+  }}
+/>
       </div>
 
       {(last || bestPatterns.length>0) && (
