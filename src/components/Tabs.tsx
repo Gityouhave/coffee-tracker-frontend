@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react'
+import React, { useEffect, useRef, useState } from 'react'
 
 type Tab = {
   id: string
@@ -11,12 +11,12 @@ export default function Tabs({
   tabs,
   storageKey = 'ct_last_tab',
   defaultId,
-  onChange,                // ← 追加
+  onChange,                // ← これを追加
 }: {
   tabs: Tab[]
   storageKey?: string
   defaultId?: string
-  onChange?: (id: string) => void   // ← 追加
+  onChange?: (id: string) => void   // ← これを追加
 }) {
   const first = defaultId || tabs[0]?.id
   const [active, setActive] = useState<string>(() => {
@@ -25,16 +25,18 @@ export default function Tabs({
   })
   const mountedRef = React.useRef(false)
 
-  useEffect(() => {
+    useEffect(() => {
     localStorage.setItem(storageKey, active)
     // 切り替え時にトップ付近へ
     window.scrollTo({ top: 0, behavior: 'smooth' })
+
     if (mountedRef.current) {
-  onChange?.(active)
-} else {
-  mountedRef.current = true
-}
-  }, [active, storageKey, onChange]))
+      // タブ切替時のフック：親から渡された onChange を呼ぶ
+      onChange?.(active)
+    } else {
+      mountedRef.current = true
+    }
+  }, [active, storageKey, onChange])
 
   return (
     <div className="space-y-4">
