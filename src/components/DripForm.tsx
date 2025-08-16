@@ -1077,6 +1077,7 @@ export function DripForm({API, beans, onSaved}:{API:string; beans:any[]; onSaved
             </div>
           )}
         </div>
+         </div>   
 
          {/* 入力群 */}
       {/* 3カラム：挽き目 / 湯温 / ドリッパー */}
