@@ -134,7 +134,28 @@ const metricJp = (k: TasteKey)=> (
 
 /** 改行フォーマットのラベル */
 const makeMultilineLabel = (d:any, bean:any, title:string, metric?:TasteKey)=>{
-  // === Dripper recommendation helpers (TOP5) ===
+  const origins = bean?.origin ? splitOrigins(String(bean.origin)) : [];
+  const flags = origins.length ? joinFlags(origins) : '—';
+  const age = fmtAgingDays(bean, d?.brew_date);
+  const { recTemp, recTime } = recommendForDrip({
+    roast_level: d?.roast_level, derive: d?.derive, label20: d?.label20,
+  });
+  const g20 = grind20(d);
+  const g6  = grindGroup6(g20);
+
+  const line1 = `${title}${star5(d?.ratings?.overall)}：${bean?.name||'—'}（${flags}｜${bean?.roast_level||'—'}｜${age}）`;
+  const line2 = `${d?.dripper||'—'}・` +
+    [
+      Number.isFinite(d?.grind)        ? `挽き${d.grind}${g6?`（${g6}）`:''}` : null,
+      Number.isFinite(d?.water_temp_c) ? `湯温${d.water_temp_c}℃${deltaTemp(d?.water_temp_c, recTemp ?? null)}` : null,
+      Number.isFinite(d?.dose_g)       ? `豆${d.dose_g}g` : null,
+      Number.isFinite(d?.water_g)      ? `湯量${d.water_g}g` : null,
+      Number.isFinite(d?.time_sec)     ? `時間${secToMMSS(d.time_sec)}${deltaTime(d?.time_sec, recTime ?? null)}` : null,
+    ].filter(Boolean).join('・');
+  const line3 = metric ? `〈${metricJp(metric)}〉${Number(d?.ratings?.[metric])||'—'}` : '';
+  return [line1, line2, line3].filter(Boolean).join('\n');
+};
+// === Dripper recommendation helpers (TOP5) ===
 const purposeDict:Record<string,string> = {
   'ハリオ':'クリアで酸を活かす',
   'フラワー':'華やかな香りを引き出す',
@@ -151,7 +172,6 @@ const purposeDict:Record<string,string> = {
   'エスプレッソ':'凝縮感・厚み'
 };
 
-/** 推奨ドリッパーTOP5（実績 > ルール） */
 const pickRecommendedDrippers = (args:{
   bean?: any,
   beanStats?: any|null
@@ -162,7 +182,7 @@ const pickRecommendedDrippers = (args:{
   const addl = String(bean?.addl_process||'');
   const origin = String(bean?.origin||'');
 
-  // 1) 実績ベース（by_methodのavg_overall降順）
+  // 1) 実績ベース
   const byMethod = Array.isArray(beanStats?.by_method) ? beanStats.by_method as Array<{dripper:string; avg_overall:number}> : [];
   const bestByData = byMethod
     .filter(x=> typeof x?.avg_overall==='number' && x?.dripper)
@@ -207,27 +227,6 @@ const pickRecommendedDrippers = (args:{
     name: x,
     purpose: purposeDict[x] ?? '—'
   }));
-};
-  const origins = bean?.origin ? splitOrigins(String(bean.origin)) : [];
-  const flags = origins.length ? joinFlags(origins) : '—';
-  const age = fmtAgingDays(bean, d?.brew_date);
-  const { recTemp, recTime } = recommendForDrip({
-    roast_level: d?.roast_level, derive: d?.derive, label20: d?.label20,
-  });
-  const g20 = grind20(d);
-  const g6  = grindGroup6(g20);
-
-  const line1 = `${title}${star5(d?.ratings?.overall)}：${bean?.name||'—'}（${flags}｜${bean?.roast_level||'—'}｜${age}）`;
-  const line2 = `${d?.dripper||'—'}・` +
-    [
-      Number.isFinite(d?.grind)        ? `挽き${d.grind}${g6?`（${g6}）`:''}` : null,
-      Number.isFinite(d?.water_temp_c) ? `湯温${d.water_temp_c}℃${deltaTemp(d?.water_temp_c, recTemp ?? null)}` : null,
-      Number.isFinite(d?.dose_g)       ? `豆${d.dose_g}g` : null,
-      Number.isFinite(d?.water_g)      ? `湯量${d.water_g}g` : null,
-      Number.isFinite(d?.time_sec)     ? `時間${secToMMSS(d.time_sec)}${deltaTime(d?.time_sec, recTime ?? null)}` : null,
-    ].filter(Boolean).join('・');
-  const line3 = metric ? `〈${metricJp(metric)}〉${Number(d?.ratings?.[metric])||'—'}` : '';
-  return [line1, line2, line3].filter(Boolean).join('\n');
 };
 
 /** 焙煎度→推奨湯温（℃） */
