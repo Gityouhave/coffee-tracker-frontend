@@ -1018,21 +1018,67 @@ export function DripForm({API, beans, onSaved}:{API:string; beans:any[]; onSaved
     </div>
   </div>
 
-  {/* ドリッパー */}
-  <div>
-    <select
-      className="border rounded p-2 w-full"
-      value={form.dripper||''}
-      onChange={e=>handle('dripper',e.target.value)}
-    >
-      <option value="">ドリッパー</option>
-      {['水出し','エアロプレス','クレバー','ハリオスイッチ','ハリオ','フラワー','クリスタル','カリタウェーブ','ブルーボトル','コーノ','フィン','ネル','フレンチプレス','エスプレッソ','モカポット','サイフォン'].map(x=> <option key={x}>{x}</option>)}
-    </select>
-    <div className="text-xs text-gray-600 mt-1">
-      ドリッパー理論：{ form.dripper ? (derive?.theory?.dripper ?? '—') : '--' }
+  // ----- 推奨ドリッパー計算（上に配置）-----
+{(() => {
+  const byMethod = Array.isArray(beanStats?.by_method) ? beanStats.by_method
+    .map((x:any)=> ({ dripper: String(x.dripper), avg_overall: Number(x.avg_overall)||0 }))
+    .filter(x=> !!x.dripper) : [];
+
+  // スコープ実績からドリッパー名を抽出
+  const bestFromScopes: string[] = [];
+  const s = bestByScopeMetric;
+  const m = bestMetric;
+  if (s?.thisBean?.[m]?.dripper) bestFromScopes.push(String(s.thisBean[m].dripper));
+  if (s?.sameRoast?.[m]?.dripper) bestFromScopes.push(String(s.sameRoast[m].dripper));
+  if (s?.originNear?.[m]?.dripper) bestFromScopes.push(String(s.originNear[m].dripper));
+
+  // 推奨実行
+  const rec = recommendDripper({
+    roast_level: selBean?.roast_level || null,
+    process: selBean?.process || derive?.theory?.process || null,
+    deriveTheoryDripper: derive?.theory?.dripper || null,
+    bestMetric,
+    bestDrippersFromScopes: bestFromScopes as any,
+    byMethod: byMethod as any,
+    allowNonDrip: false,
+  });
+
+  // スコア差（選択がある場合）
+  const selected = String(form.dripper || '');
+  const topScore = rec.ranked[0]?.score ?? 0;
+  const selScore = selected
+    ? (rec.ranked.find(r=> r.name === selected)?.score ?? 0)
+    : 0;
+  const diff = (topScore - selScore);
+
+  return (
+    <div className="mb-2">
+      <div className="text-xs text-gray-600 mb-1">
+        推奨ドリッパー：<b>{rec.primary || '—'}</b>
+        <span className="ml-2 text-[11px] text-gray-500">（{rec.ranked.slice(0,3).map(r=>r.name).join(' / ')}）</span>
+      </div>
+
+      {/* セレクト（中央） */}
+      <select
+        className="border rounded p-2 w-full"
+        value={form.dripper||''}
+        onChange={e=>handle('dripper',e.target.value)}
+      >
+        <option value="">ドリッパー</option>
+        {['水出し','エアロプレス','クレバー','ハリオスイッチ','ハリオ','フラワー','クリスタル','カリタウェーブ','ブルーボトル','コーノ','フィン','ネル','フレンチプレス','エスプレッソ','モカポット','サイフォン'].map(x=> (
+          <option key={x} value={x}>{x}</option>
+        ))}
+      </select>
+
+      {/* 差分（下） */}
+      <div className="text-xs text-gray-600 mt-1">
+        選択との差分：{selected
+          ? (selected === rec.primary ? '一致' : `非一致（推奨との差スコア ${diff.toFixed(3)}）`)
+          : '—'}
+      </div>
     </div>
-  </div>
-</div>
+  );
+})()}
 
 <div className="grid grid-cols-3 gap-2">
   {/* 豆量 */}
