@@ -9,6 +9,39 @@ import {
 import { filterSortBeans, beanOptionLabel, ROASTS } from '../utils/beanFilters'
 import { ORIGINS } from '../constants/origins'
 import { ORIGIN_THEORIES } from '../constants/originTheories'
+// === BEGIN: radar & flags helpers ===
+const RADAR_COLORS = {
+  beanAvg:        { stroke: '#111827', fill: '#11182733' }, // 黒（平均）
+  sameRoastBest:  { stroke: '#ef4444', fill: '#ef444433' }, // 赤（同焙煎度ベスト）
+  originNearBest: { stroke: '#3b82f6', fill: '#3b82f633' }, // 青（産地×近焙煎度ベスト）
+  thisBeanBest:   { stroke: '#10b981', fill: '#10b98133' }, // 緑（その豆ベスト）
+};
+
+const TASTE_KEYS = [
+  { key:'sweetness',  label:'甘味' },
+  { key:'body',       label:'コク' },
+  { key:'aftertaste', label:'後味' },
+  { key:'clean',      label:'クリーンさ' },
+  { key:'flavor',     label:'風味' },
+  { key:'overall',    label:'総合' },
+] as const;
+type TasteKey = typeof TASTE_KEYS[number]['key'];
+type ScopeKey = 'thisBean'|'sameRoast'|'originNear';
+
+const COUNTRY_FLAGS: Record<string,string> = {
+  'コロンビア':'🇨🇴','ブラジル':'🇧🇷','エチオピア':'🇪🇹','ケニア':'🇰🇪','グアテマラ':'🇬🇹',
+  'コスタリカ':'🇨🇷','ホンジュラス':'🇭🇳','エルサルバドル':'🇸🇻','ニカラグア':'🇳🇮','パナマ':'🇵🇦',
+  'ペルー':'🇵🇪','ボリビア':'🇧🇴','メキシコ':'🇲🇽','ルワンダ':'🇷🇼','ブルンジ':'🇧🇮','タンザニア':'🇹🇿',
+  'インドネシア':'🇮🇩','東ティモール':'🇹🇱','イエメン':'🇾🇪','中国':'🇨🇳','日本':'🇯🇵',
+};
+const withFlag = (country:string)=> (COUNTRY_FLAGS[country]||'') + country;
+
+/** 60秒未満は "xx秒"、それ以上は "m:ss" で返す */
+const formatSecFriendly = (s?:number)=>{
+  if(s==null || !Number.isFinite(s)) return '—';
+  return s < 60 ? `${s}秒` : secToMMSS(s);
+};
+// === END: radar & flags helpers ===
 
 /** 焙煎度→推奨湯温（℃） */
 const ROAST_TEMP: Record<string, number> = {
@@ -95,6 +128,16 @@ const [dripDate, setDripDate] = useState<string>(
   const [beanDrips, setBeanDrips] = useState<any[]>([])
   const [allDrips, setAllDrips] = useState<any[]>([])
   const [radarData, setRadarData] = useState<any[]>([])
+  // BEGIN: new states
+const [bestMetric, setBestMetric] = useState<TasteKey>('overall');
+const [visibleScopes, setVisibleScopes] = useState<Record<ScopeKey, boolean>>({
+  thisBean: true, sameRoast: true, originNear: true
+});
+const [bestByScopeMetric, setBestByScopeMetric] =
+  useState<Record<ScopeKey, Partial<Record<TasteKey, any>>>>({ thisBean:{}, sameRoast:{}, originNear:{} });
+const [beanAvgRatings, setBeanAvgRatings] =
+  useState<Record<string, number>>({}); // {clean, flavor, ...} の平均だけを保持
+// END: new states
   const [yMetric, setYMetric] = useState<'overall'|'clean'|'flavor'|'body'>('overall')
   const [editingDripId, setEditingDripId] = useState<number|null>(null)
   const [last, setLast] = useState<any|null>(null)
@@ -155,6 +198,22 @@ const [dripDate, setDripDate] = useState<string>(
       storage:      s.storage      ?? f(pat.fields.storage),
     }))
   }
+  // BEGIN: applyFromDrip
+const applyFromDrip = (d:any) => {
+  if(!d) return;
+  setForm((s:any)=> ({
+    ...s,
+    grind:        d.grind        ?? s.grind,
+    water_temp_c: d.water_temp_c ?? s.water_temp_c,
+    dose_g:       d.dose_g       ?? s.dose_g,
+    water_g:      d.water_g      ?? s.water_g,
+    drawdown_g:   d.drawdown_g   ?? s.drawdown_g,
+    time:         d.time_sec!=null ? secToMMSS(d.time_sec) : s.time,
+    dripper:      d.dripper ?? s.dripper,
+    storage:      d.storage ?? s.storage,
+  }))
+}
+// END: applyFromDrip
 
   const handle = (k:string,v:any)=> setForm((s:any)=> ({...s,[k]:v}))
   const handleRating = (k:string,v:any)=> setForm((s:any)=> ({...s, ratings:{...s.ratings, [k]:v}}))
@@ -283,9 +342,30 @@ const [dripDate, setDripDate] = useState<string>(
         dripper: d.dripper ?? null,
         storage: d.storage ?? null,
       }) : {}
+      // BEGIN: mkLabelSub
+const mkLabelSub = (d:any)=>{
+  const parts = [
+    d.roast_level ? `焙煎度:${d.roast_level}`:null,
+    Number.isFinite(d.grind)?`挽き:${d.grind}`:null,
+    Number.isFinite(d.water_temp_c)?`湯温:${d.water_temp_c}℃`:null,
+    Number.isFinite(d.dose_g)?`豆:${d.dose_g}g`:null,
+    Number.isFinite(d.water_g)?`湯量:${d.water_g}g`:null,
+    Number.isFinite(d.time_sec)?`時間:${secToMMSS(d.time_sec)}`:null,
+  ].filter(Boolean).join(' / ')
+  return parts
+}
+// END: mkLabelSub
       const pats: BestPattern[] = []
-      if (bestSR) pats.push({ id:'sameRoast', label:`同焙煎度ベスト（★${bestSR.ratings?.overall ?? '-'} / ${bestSR.brew_date} / ${bestSR.dripper ?? '—'}）`, fields: mkFields(bestSR) })
-      if (bestON) pats.push({ id:'originNear', label:`同産地×近焙煎度ベスト（★${bestON.ratings?.overall ?? '-'} / ${bestON.brew_date} / ${bestON.dripper ?? '—'}）`, fields: mkFields(bestON) })
+      if (bestSR) pats.push({
+  id:'sameRoast',
+  label:`同焙煎度ベスト（★${bestSR.ratings?.overall ?? '-'} / ${bestSR.brew_date} / ${bestSR.dripper ?? '—'} / ${mkLabelSub(bestSR)}）`,
+  fields: mkFields(bestSR)
+})
+if (bestON) pats.push({
+  id:'originNear',
+  label:`同産地×近焙煎度ベスト（★${bestON.ratings?.overall ?? '-'} / ${bestON.brew_date} / ${bestON.dripper ?? '—'} / ${mkLabelSub(bestON)}）`,
+  fields: mkFields(bestON)
+})
       setBestPatterns(pats)
       setSelectedPatternId(pats[0]?.id || '')
 
@@ -298,6 +378,24 @@ const [dripDate, setDripDate] = useState<string>(
         sameRoastBest: Number(srRatings?.[k.key] ?? 0),
         originNearBest: Number(onRatings?.[k.key] ?? 0),
       }))
+      // BEGIN: bestByScopeMetric build
+const bestOf = (arr:any[], metric:TasteKey) =>
+  arr
+    .filter(d => Number.isFinite(Number(d?.ratings?.[metric])))
+    .sort((a,b)=> Number(b.ratings[metric]) - Number(a.ratings[metric])
+                 || (new Date(b.brew_date).getTime() - new Date(a.brew_date).getTime()))[0] || null;
+
+const bestMap: Record<ScopeKey, Partial<Record<TasteKey, any>>> = {
+  thisBean: {}, sameRoast: {}, originNear: {}
+}
+for (const t of TASTE_KEYS.map(t=>t.key as TasteKey)) {
+  bestMap.thisBean[t]   = bestOf(mine, t)
+  bestMap.sameRoast[t]  = bestOf(sameRoastCandidates, t)
+  bestMap.originNear[t] = bestOf(originNearCandidates, t)
+}
+setBestByScopeMetric(bestMap)
+setBeanAvgRatings(beanAvgMap) // ← この useEffect 内で作った平均を state に出しておく
+// END: bestByScopeMetric build
       setRadarData(rd)
     })()
   },[form.bean_id, API, beans])
@@ -377,11 +475,15 @@ if (!form.brew_date) {
     return (<span aria-label={`rating ${s} of 5`}>{'★★★★★'.slice(0,s)}{'☆☆☆☆☆'.slice(0,5-s)} <span className="text-[11px] text-gray-500">({avg})</span></span>)
   }
   const originTheoryText = ()=>{
-    if(!selBean?.origin) return '—'
-    const cs = String(selBean.origin).split(',').map(s=>s.trim()).filter(Boolean)
-    const notes = cs.map(c => ORIGIN_THEORIES[c] ? `${c}：${ORIGIN_THEORIES[c]}` : '').filter(Boolean)
-    return notes.length ? notes.join(' ／ ') : '—'
-  }
+  if(!selBean?.origin) return '—'
+  const cs = String(selBean.origin).split(',').map(s=>s.trim()).filter(Boolean)
+  const notes = cs.map(c => {
+    const theory = ORIGIN_THEORIES[c]
+    if(!theory || isUnknown(theory)) return '' // 未指定/不明は出さない
+    return `${withFlag(c)}（${theory}）`
+  }).filter(Boolean)
+  return notes.length ? notes.join(' ／ ') : '—'
+}
   // ...originTheoryText の直後に↓を置く
 // --- 5段階評価セレクト（選択肢エラー回避用） ---
 const to5step = (v: any) => {
@@ -555,7 +657,12 @@ const RatingSelect = ({
         <div className="font-semibold">選択豆：{selBean?.name ?? '--'}</div>
 
         <TheoryRow label="産地セオリー" theory={originTheoryText()} value={selBean?.origin} show={!!form.bean_id}/>
-        <TheoryRow label="精製セオリー" theory={derive?.theory?.process} value={selBean?.process} show={!!form.bean_id}/>
+        <TheoryRow
+  label="精製セオリー"
+  theory={derive?.theory?.process}
+  value={selBean?.process}
+  show={!!form.bean_id && !!derive?.theory?.process && !isUnknown(derive?.theory?.process)}
+/>
         <TheoryRow label="追加処理セオリー" theory={derive?.theory?.addl_process} value={selBean?.addl_process} show={!!form.bean_id}/>
 
         {!isUnknown(selBean?.taste_memo) && (<div>テイストメモ：{selBean?.taste_memo}</div>)}
@@ -565,21 +672,120 @@ const RatingSelect = ({
 
         {/* レーダー：この豆の平均 / 同焙煎度ベスト / 同産地×近焙煎度ベスト */}
         {hasRadar && (
-          <div className="h-56">
-            <ResponsiveContainer>
-              <RadarChart data={radarData}>
-                <PolarGrid />
-                <PolarAngleAxis dataKey="subject" />
-                <PolarRadiusAxis angle={30} domain={[0, 10]} />
-                <Radar name="この豆の平均" dataKey="beanAvg" fillOpacity={0.2} />
-                {bestSameRoast && <Radar name="同焙煎度ベスト" dataKey="sameRoastBest" fillOpacity={0.2} />}
-                {bestOriginNear && <Radar name="産地×近焙煎度ベスト" dataKey="originNearBest" fillOpacity={0.2} />}
-                <Legend />
-                <Tooltip />
-              </RadarChart>
-            </ResponsiveContainer>
-          </div>
-        )}
+  <div className="space-y-2">
+    {/* 表示切替UI */}
+    <div className="flex flex-wrap items-center gap-2 text-xs">
+      <span>ベスト算出指標：</span>
+      <select className="border rounded p-1"
+              value={bestMetric}
+              onChange={e=>setBestMetric(e.target.value as TasteKey)}>
+        {TASTE_KEYS.map(t=> <option key={t.key} value={t.key}>{t.label}</option>)}
+      </select>
+
+      <span className="ml-2">表示：</span>
+      {([
+        {k:'thisBean',    label:'その豆ベスト'},
+        {k:'sameRoast',   label:'同焙煎度ベスト'},
+        {k:'originNear',  label:'産地×近焙煎度ベスト'},
+      ] as {k:ScopeKey,label:string}[]).map(s=>(
+        <label key={s.k} className="inline-flex items-center gap-1">
+          <input type="checkbox"
+                 checked={visibleScopes[s.k]}
+                 onChange={e=>setVisibleScopes(v=>({...v,[s.k]:e.target.checked}))}/>
+          <span>{s.label}</span>
+        </label>
+      ))}
+    </div>
+
+    {/* レーダー用データ作成 */}
+    {(() => {
+      const th = bestByScopeMetric?.thisBean?.[bestMetric];
+      const sr = bestByScopeMetric?.sameRoast?.[bestMetric];
+      const on = bestByScopeMetric?.originNear?.[bestMetric];
+      const val = (d:any,k: TasteKey)=> Number(d?.ratings?.[k])||0;
+      const data = [
+        {subject:'クリーンさ',  beanAvg:Number(beanAvgRatings.clean)||0, thisBean:val(th,'clean'),  sameRoast:val(sr,'clean'),  originNear:val(on,'clean')},
+        {subject:'風味',        beanAvg:Number(beanAvgRatings.flavor)||0,thisBean:val(th,'flavor'), sameRoast:val(sr,'flavor'), originNear:val(on,'flavor')},
+        {subject:'酸味',        beanAvg:Number(beanAvgRatings.acidity)||0,thisBean:val(th,'acidity'),sameRoast:val(sr,'acidity'),originNear:val(on,'acidity')},
+        {subject:'苦味',        beanAvg:Number(beanAvgRatings.bitterness)||0,thisBean:val(th,'bitterness'),sameRoast:val(sr,'bitterness'),originNear:val(on,'bitterness')},
+        {subject:'甘味',        beanAvg:Number(beanAvgRatings.sweetness)||0,thisBean:val(th,'sweetness'),sameRoast:val(sr,'sweetness'),originNear:val(on,'sweetness')},
+        {subject:'コク',        beanAvg:Number(beanAvgRatings.body)||0,  thisBean:val(th,'body'),   sameRoast:val(sr,'body'),   originNear:val(on,'body')},
+        {subject:'後味',        beanAvg:Number(beanAvgRatings.aftertaste)||0,thisBean:val(th,'aftertaste'),sameRoast:val(sr,'aftertaste'),originNear:val(on,'aftertaste')},
+      ];
+
+      return (
+        <div className="h-56">
+          <ResponsiveContainer>
+            <RadarChart data={data}>
+              <PolarGrid />
+              <PolarAngleAxis dataKey="subject" />
+              <PolarRadiusAxis angle={30} domain={[0, 10]} />
+
+              {/* 平均（黒） */}
+              <Radar name="この豆の平均" dataKey="beanAvg"
+                     stroke={RADAR_COLORS.beanAvg.stroke}
+                     fill={RADAR_COLORS.beanAvg.fill}
+                     fillOpacity={1} />
+
+              {/* ベスト（緑／赤／青） */}
+              {visibleScopes.thisBean && (
+                <Radar name={`その豆ベスト（${TASTE_KEYS.find(t=>t.key===bestMetric)?.label}）`}
+                       dataKey="thisBean"
+                       stroke={RADAR_COLORS.thisBeanBest.stroke}
+                       fill={RADAR_COLORS.thisBeanBest.fill}
+                       fillOpacity={0.35} />
+              )}
+              {visibleScopes.sameRoast && (
+                <Radar name={`同焙煎度ベスト（${TASTE_KEYS.find(t=>t.key===bestMetric)?.label}）`}
+                       dataKey="sameRoast"
+                       stroke={RADAR_COLORS.sameRoastBest.stroke}
+                       fill={RADAR_COLORS.sameRoastBest.fill}
+                       fillOpacity={0.35} />
+              )}
+              {visibleScopes.originNear && (
+                <Radar name={`産地×近焙煎度ベスト（${TASTE_KEYS.find(t=>t.key===bestMetric)?.label}）`}
+                       dataKey="originNear"
+                       stroke={RADAR_COLORS.originNearBest.stroke}
+                       fill={RADAR_COLORS.originNearBest.fill}
+                       fillOpacity={0.35} />
+              )}
+
+              <Legend />
+              <Tooltip />
+            </RadarChart>
+          </ResponsiveContainer>
+        </div>
+      )
+    })()}
+  </div>
+)}
+// END: radar block
+        {/* BEGIN: apply best buttons */}
+<div className="flex flex-wrap items-center gap-2 text-xs">
+  <span>この条件を反映：</span>
+  {(['thisBean','sameRoast','originNear'] as ScopeKey[]).map(scope=>{
+    const d = bestByScopeMetric?.[scope]?.[bestMetric];
+    if(!d) return null;
+    const label = scope==='thisBean' ? 'その豆' : scope==='sameRoast' ? '同焙煎度' : '産地×近焙煎度';
+    const sub = [
+      d.roast_level ? `焙煎度:${d.roast_level}`:null,
+      Number.isFinite(d.dose_g)?`豆:${d.dose_g}g`:null,
+      Number.isFinite(d.grind)?`挽き:${d.grind}`:null,
+      Number.isFinite(d.water_temp_c)?`湯温:${d.water_temp_c}℃`:null,
+      Number.isFinite(d.time_sec)?`時間:${secToMMSS(d.time_sec)}`:null,
+    ].filter(Boolean).join(' / ');
+    return (
+      <button key={scope}
+        type="button"
+        onClick={()=>applyFromDrip(d)}
+        className="px-2 py-1 rounded border bg-white hover:bg-gray-50"
+        title={sub}>
+        {label}ベスト（{TASTE_KEYS.find(t=>t.key===bestMetric)?.label}）
+      </button>
+    );
+  })}
+</div>
+{/* END: apply best buttons */}
 
         {/* 豆ごとバー（抽出方法別平均） */}
         {hasStats && (
@@ -722,7 +928,9 @@ const RatingSelect = ({
       <div className="grid grid-cols-2 gap-2">
         <div>
           <input className="border rounded p-2 w-full" placeholder="抽出時間 (mm:ss)" value={form.time||''} onChange={e=>handle('time',e.target.value)} />
-          <div className="text-xs text-gray-600 mt-1">推奨所要時間：{showOrDash(!!form.bean_id, derive?.time?.recommended_sec)}秒</div>
+          <div className="text-xs text-gray-600 mt-1">
+  推奨所要時間：{showOrDash(!!form.bean_id, formatSecFriendly(Number(derive?.time?.recommended_sec)))}
+</div>
         </div>
         <select className="border rounded p-2" value={form.storage||''} onChange={e=>handle('storage',e.target.value)}>
           <option value="">保存状態</option>
@@ -751,6 +959,33 @@ const RatingSelect = ({
     <RatingSelect k="body"       label="コク（body）" />
     <RatingSelect k="aftertaste" label="後味（aftertaste）" />
   </div>
+  {/* BEGIN: per-taste best hints */}
+<div className="grid grid-cols-1 md:grid-cols-2 gap-2 text-[11px] text-gray-600">
+  {(['sweetness','body','aftertaste','clean','flavor','overall'] as TasteKey[]).map(tk=>{
+    const sb = bestByScopeMetric?.thisBean?.[tk];
+    const sr = bestByScopeMetric?.sameRoast?.[tk];
+    const on = bestByScopeMetric?.originNear?.[tk];
+    const li = [ ['その豆',sb], ['同焙煎度',sr], ['産地×近焙煎度',on] ] as const;
+    return (
+      <div key={tk} className="border rounded p-2">
+        <div className="font-medium">{TASTE_KEYS.find(t=>t.key===tk)?.label} のベスト例</div>
+        <ul className="list-disc pl-5">
+          {li.map(([name,d])=> d ? (
+            <li key={name}>
+              {name}：★{d.ratings?.[tk]} / {d.brew_date} / {d.dripper ?? '—'}
+              <button className="ml-2 px-1 py-0.5 border rounded"
+                      type="button"
+                      onClick={()=>applyFromDrip(d)}>
+                条件を反映
+              </button>
+            </li>
+          ) : <li key={name}>{name}：—</li>)}
+        </ul>
+      </div>
+    )
+  })}
+</div>
+{/* END: per-taste best hints */}
 </div>
 
       {/* 価格見積（豆の単価 × 使用量） */}
@@ -828,7 +1063,7 @@ const RatingSelect = ({
           </div>
           <div className="border rounded p-2">
             <div className="font-medium">時間</div>
-            <div>推奨：{showOrDash(!!form.bean_id, derive?.time?.recommended_sec)}秒</div>
+            <div>推奨：{showOrDash(!!form.bean_id, formatSecFriendly(Number(derive?.time?.recommended_sec)))}</div>
             {form.time ? (
               <div>Δ：{(() => {
                 const rec = Number(derive?.time?.recommended_sec)
