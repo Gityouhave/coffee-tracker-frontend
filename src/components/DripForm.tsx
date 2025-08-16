@@ -1149,18 +1149,26 @@ export function DripForm({API, beans, onSaved}:{API:string; beans:any[]; onSaved
             <div>推奨湯量：{(form.bean_id && form.dose_g) ? (derive?.ratio?.recommended_water_g ?? '—') : '--'}g</div>
             <div>Δ：{(form.bean_id && form.dose_g && form.water_g) ? (derive?.ratio?.delta_from_input ?? '—') : '--'}</div>
           </div>
-          <div className="border rounded p-2">
-            <div className="font-medium">時間</div>
-            <div>推奨：{showOrDash(!!form.bean_id, formatSecFriendly(Number(derive?.time?.recommended_sec)))}</div>
-            {form.time ? (
-              <div>Δ：{(() => {
-                const rec = Number(derive?.time?.recommended_sec)
-                const mmss = String(form.time||'')
-                const m = mmss.split(':'); const sec = (m.length===2 ? (+m[0]*60 + +m[1]) : NaN)
-                return (Number.isFinite(rec) && Number.isFinite(sec)) ? (sec-rec) : '—'
-              })()}</div>
-            ) : <div>Δ：--</div>}
-          </div>
+          
+   <div className="border rounded p-2">
+  <div className="font-medium">時間</div>
+  <div>推奨：{showOrDash(!!form.bean_id, formatSecFriendly(Number(derive?.time?.recommended_sec)))}</div>
+  <div>
+    Δ：{(() => {
+      const rec = Number(derive?.time?.recommended_sec);
+      const mmssToSec = (s?: string|null) => {
+        if (!s) return null;
+        const [mm, ss] = String(s).split(':');
+        const m = Number(mm), s2 = Number(ss);
+        if (!Number.isFinite(m) || !Number.isFinite(s2)) return null;
+        return m * 60 + s2;
+      };
+      const act = mmssToSec(form.time as string | null);
+      if (!Number.isFinite(rec) || !Number.isFinite(act ?? NaN)) return '—';
+      return deltaTime(act!, rec) || '—';
+    })()}
+  </div>
+</div>
         </div>
       </div>
 
