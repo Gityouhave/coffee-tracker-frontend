@@ -89,7 +89,6 @@ const RATING_KEYS = [
 ] as const;
 type RatingKey = typeof RATING_KEYS[number];
 type TasteKey = typeof TASTE_KEYS[number]['key'];
-type ScopeKey = 'thisBean'|'sameRoast'|'originNear';
 
 /** 60秒未満は "xx秒"、それ以上は "m:ss" で返す */
 const formatSecFriendly = (s?:number)=>{
@@ -236,7 +235,6 @@ export function DripForm({API, beans, onSaved}:{API:string; beans:any[]; onSaved
     useState<Record<string, number>>({});
   // END: new states
 
-  const [selectedScope, setSelectedScope] = useState<ScopeKey>('thisBean');
   const [yMetric, setYMetric] = useState<'overall'|'clean'|'flavor'|'body'>('overall')
   const [editingDripId, setEditingDripId] = useState<number|null>(null)
   const [last, setLast] = useState<any|null>(null)
