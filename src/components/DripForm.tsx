@@ -342,6 +342,17 @@ export function DripForm({API, beans, onSaved}:{API:string; beans:any[]; onSaved
     radar: true, byMethod: true, corrTemp: true, corrTime: true,
   });
 
+  // 追加: レーダー内の個別カード表示切替（同豆/同焙煎/近焙煎/平均/前回）
+type RadarItemKey = 'thisBean'|'sameRoast'|'originNear'|'average'|'previous';
+const [showCharts, setShowCharts] = useState<Record<RadarItemKey, boolean>>({
+  thisBean: true,  // ←既定で3つは表示
+  sameRoast: true,
+  originNear: true,
+  average: false,  // ←平均はデフォルトOFF
+  previous: false, // ←前回もデフォルトOFF
+});
+const toggleChart = (k: RadarItemKey) =>
+  setShowCharts(s => ({ ...s, [k]: !s[k] }));
   // セレクト＆適用ボタン用
   type BestPattern = {
     id: 'thisBean'|'sameRoast'|'originNear'
@@ -826,6 +837,32 @@ export function DripForm({API, beans, onSaved}:{API:string; beans:any[]; onSaved
       </div>
 
       {/* セオリー & 統計 */}
+      {/* === グラフセクション見出し＋トグル === */}
+<div className="flex items-center justify-between">
+  <div className="text-sm font-semibold">比較グラフ</div>
+  <div className="flex flex-wrap items-center gap-2 text-xs">
+    <label className="inline-flex items-center gap-1">
+      <input type="checkbox" checked={showCharts.thisBean} onChange={()=>toggleChart('thisBean')} />
+      同豆ベスト
+    </label>
+    <label className="inline-flex items-center gap-1">
+      <input type="checkbox" checked={showCharts.sameRoast} onChange={()=>toggleChart('sameRoast')} />
+      同焙煎ベスト
+    </label>
+    <label className="inline-flex items-center gap-1">
+      <input type="checkbox" checked={showCharts.originNear} onChange={()=>toggleChart('originNear')} />
+      産地×近焙煎
+    </label>
+    <label className="inline-flex items-center gap-1">
+      <input type="checkbox" checked={showCharts.average} onChange={()=>toggleChart('average')} />
+      平均
+    </label>
+    <label className="inline-flex items-center gap-1">
+      <input type="checkbox" checked={showCharts.previous} onChange={()=>toggleChart('previous')} />
+      前回
+    </label>
+  </div>
+</div>
       <div className="bg-gray-50 border rounded p-2 space-y-2 text-sm">
         {/* 表示するグラフの選択 */}
         <div className="flex flex-wrap items-center gap-3 text-xs">
@@ -862,169 +899,138 @@ export function DripForm({API, beans, onSaved}:{API:string; beans:any[]; onSaved
         {!isUnknown(selBean?.brew_policy) && (<div>ドリップ方針メモ：{selBean?.brew_policy}</div>)}
 
         {hasAvg && (<div className="text-sm">平均評価（★）：<StarRow avg={beanStats?.avg_overall} /></div>)}
+{hasRadar && showSection.radar && (
+  <div className="space-y-2">
+    {/* 基準セレクト（そのまま） */}
+    <div className="flex flex-wrap items-center gap-2 text-xs">
+      <span>暫定最適値の基準：</span>
+      <select
+        className="border rounded p-1"
+        value={bestMetric}
+        onChange={(e)=>setBestMetric(e.target.value as TasteKey)}
+      >
+        {TASTE_KEYS.map(t=> <option key={t.key} value={t.key}>{t.label}</option>)}
+      </select>
+    </div>
 
-      {hasRadar && showSection.radar && (
-        <div className="space-y-2">
-          <div className="flex flex-wrap items-center gap-2 text-xs">
-            <span>暫定最適値の基準：</span>
-            <select
-              className="border rounded p-1"
-              value={bestMetric}
-              onChange={(e)=>setBestMetric(e.target.value as TasteKey)}
-            >
-              {TASTE_KEYS.map(t=> <option key={t.key} value={t.key}>{t.label}</option>)}
-            </select>
+    {/* コンパクトなカードグリッド（余白を詰める） */}
+    <div className="grid gap-2 [grid-template-columns:repeat(auto-fit,minmax(220px,1fr))]">
+      {/* 同豆・同焙煎・近焙煎 */}
+      {(['thisBean','sameRoast','originNear'] as const).map(scope => {
+        if (!showCharts[scope]) return null;
+        const d = bestByScopeMetric?.[scope]?.[bestMetric];
+        const title = scopeTitle(scope as ScopeKey);
+        if (!d) {
+          return (
+            <div key={scope} className="border rounded p-2 bg-white text-[11px] text-gray-500">
+              {title}（{metricJp(bestMetric)}）：データなし
+            </div>
+          );
+        }
+        const bean = beans.find(b=> String(b.id)===String(d.bean_id));
+        const radarData = [
+          {subject:'クリーンさ',  value:Number(d?.ratings?.clean)||0},
+          {subject:'風味',        value:Number(d?.ratings?.flavor)||0},
+          {subject:'酸味',        value:Number(d?.ratings?.acidity)||0},
+          {subject:'苦味',        value:Number(d?.ratings?.bitterness)||0},
+          {subject:'甘味',        value:Number(d?.ratings?.sweetness)||0},
+          {subject:'コク',        value:Number(d?.ratings?.body)||0},
+          {subject:'後味',        value:Number(d?.ratings?.aftertaste)||0},
+        ];
+        const color =
+          scope === 'thisBean' ? RADAR_COLORS.thisBeanBest
+          : scope === 'sameRoast' ? RADAR_COLORS.sameRoastBest
+          : RADAR_COLORS.originNearBest;
+
+        return (
+          <div key={scope} className="border rounded bg-white p-2 flex flex-col gap-1">
+            <div className="flex items-center justify-between">
+              <div className="text-xs font-semibold">{title}（{metricJp(bestMetric)}）</div>
+              <button
+                type="button"
+                onClick={()=> applyFromDrip(d)}
+                className="px-2 py-0.5 rounded border bg-white hover:bg-gray-50 text-[11px]"
+              >
+                適用
+              </button>
+            </div>
+            <ChartFrame aspect={0.9} className="min-h-[160px]">
+              <RadarChart data={radarData} margin={{ top: 4, right: 4, bottom: 4, left: 4 }}>
+                <PolarGrid />
+                <PolarAngleAxis dataKey="subject" tick={{ fontSize: 10 }} />
+                <PolarRadiusAxis angle={30} domain={[0,10]} tick={{ fontSize: 9 }} />
+                <Radar name={title} dataKey="value" stroke={color.stroke} fill={color.fill} fillOpacity={0.32} />
+                <Tooltip />
+              </RadarChart>
+            </ChartFrame>
+            <div className="text-[11px] whitespace-pre-wrap leading-5">
+              {makeMultilineLabel(d, bean, title, bestMetric)}
+            </div>
           </div>
+        );
+      })}
 
-         <div className="grid gap-3 [grid-template-columns:repeat(auto-fit,minmax(260px,1fr))]">
-            {(['thisBean','sameRoast','originNear'] as ScopeKey[]).map(scope => {
-              const d = bestByScopeMetric?.[scope]?.[bestMetric];
-              const title = scopeTitle(scope);
-              if (!d) {
-                return (
-                  <div key={scope} className="border rounded p-3 bg-white text-xs text-gray-500">
-                    {title}（{metricJp(bestMetric)}）：データなし
-                  </div>
-                );
-              }
-              const bean = beans.find(b=> String(b.id)===String(d.bean_id));
-              const radarData = [
-                {subject:'クリーンさ',  value:Number(d?.ratings?.clean)||0},
-                {subject:'風味',        value:Number(d?.ratings?.flavor)||0},
-                {subject:'酸味',        value:Number(d?.ratings?.acidity)||0},
-                {subject:'苦味',        value:Number(d?.ratings?.bitterness)||0},
-                {subject:'甘味',        value:Number(d?.ratings?.sweetness)||0},
-                {subject:'コク',        value:Number(d?.ratings?.body)||0},
-                {subject:'後味',        value:Number(d?.ratings?.aftertaste)||0},
-              ];
-              const color =
-                scope === 'thisBean' ? RADAR_COLORS.thisBeanBest
-                : scope === 'sameRoast' ? RADAR_COLORS.sameRoastBest
-                : RADAR_COLORS.originNearBest;
-
-              return (
-                <div key={scope} className="border rounded bg-white p-3 flex flex-col gap-2">
-                  <div className="flex items-center justify-between">
-                    <div className="text-sm font-semibold">
-                      {title}（{metricJp(bestMetric)}）
-                    </div>
-                    <button
-                      type="button"
-                      onClick={()=> applyFromDrip(d)}
-                      className="px-2 py-1 rounded border bg-white hover:bg-gray-50 text-xs"
-                    >
-                      この値を適用
-                    </button>
-                  </div>
-
-                 <ChartFrame aspect={1}>
-  <RadarChart data={radarData} margin={{ top: 8, right: 8, bottom: 8, left: 8 }}>
-    <PolarGrid />
-    <PolarAngleAxis dataKey="subject" tick={{ fontSize: 12 }} />
-    <PolarRadiusAxis angle={30} domain={[0,10]} tick={{ fontSize: 10 }} />
-    <Radar name={title} dataKey="value" stroke={color.stroke} fill={color.fill} fillOpacity={0.35} />
-    <Tooltip />
-  </RadarChart>
-</ChartFrame>
-
-                  <div className="text-xs whitespace-pre-wrap leading-5">
-                    {makeMultilineLabel(d, bean, title, bestMetric)}
-                  </div>
-                </div>
-              );
-            })}
-          </div>
-          </div>
+      {/* 平均 */}
+      {showCharts.average && Object.keys(beanAvgRatings||{}).length > 0 && (
+        <div className="border rounded bg-white p-2 flex flex-col gap-1" key="avg">
+          <div className="text-xs font-semibold">平均（{metricJp(bestMetric)}）</div>
+          <ChartFrame aspect={0.9} className="min-h-[160px]">
+            <RadarChart data={[
+              {subject:'クリーンさ',  value:Number(beanAvgRatings.clean)||0},
+              {subject:'風味',        value:Number(beanAvgRatings.flavor)||0},
+              {subject:'酸味',        value:Number(beanAvgRatings.acidity)||0},
+              {subject:'苦味',        value:Number(beanAvgRatings.bitterness)||0},
+              {subject:'甘味',        value:Number(beanAvgRatings.sweetness)||0},
+              {subject:'コク',        value:Number(beanAvgRatings.body)||0},
+              {subject:'後味',        value:Number(beanAvgRatings.aftertaste)||0},
+            ]} margin={{ top: 4, right: 4, bottom: 4, left: 4 }}>
+              <PolarGrid />
+              <PolarAngleAxis dataKey="subject" tick={{ fontSize: 10 }} />
+              <PolarRadiusAxis angle={30} domain={[0,10]} tick={{ fontSize: 9 }} />
+              <Radar name="平均" dataKey="value" stroke={RADAR_COLORS.beanAvg.stroke} fill={RADAR_COLORS.beanAvg.fill} fillOpacity={0.32} />
+              <Tooltip />
+            </RadarChart>
+          </ChartFrame>
+          <div className="text-[11px] text-gray-500">直近の同豆ドリップ平均（7項目）</div>
+        </div>
       )}
 
-       {/* 追加：前回 */}
-{last ? (
-  <div className="border rounded bg-white p-3 flex flex-col gap-2" key="last">
-    <div className="flex items-center justify-between">
-      <div className="text-sm font-semibold">前回（{metricJp(bestMetric)}）</div>
-      <button
-        type="button"
-        onClick={() => applyFromDrip(last)}
-        className="px-2 py-1 rounded border bg-white hover:bg-gray-50 text-xs"
-      >
-        この値を適用
-      </button>
+      {/* 前回 */}
+      {showCharts.previous && last && (
+        <div className="border rounded bg-white p-2 flex flex-col gap-1" key="last">
+          <div className="flex items-center justify-between">
+            <div className="text-xs font-semibold">前回（{metricJp(bestMetric)}）</div>
+            <button
+              type="button"
+              onClick={()=> applyFromDrip(last)}
+              className="px-2 py-0.5 rounded border bg-white hover:bg-gray-50 text-[11px]"
+            >
+              適用
+            </button>
+          </div>
+          <ChartFrame aspect={0.9} className="min-h-[160px]">
+            <RadarChart data={[
+              {subject:'クリーンさ',  value:Number(last?.ratings?.clean)||0},
+              {subject:'風味',        value:Number(last?.ratings?.flavor)||0},
+              {subject:'酸味',        value:Number(last?.ratings?.acidity)||0},
+              {subject:'苦味',        value:Number(last?.ratings?.bitterness)||0},
+              {subject:'甘味',        value:Number(last?.ratings?.sweetness)||0},
+              {subject:'コク',        value:Number(last?.ratings?.body)||0},
+              {subject:'後味',        value:Number(last?.ratings?.aftertaste)||0},
+            ]} margin={{ top: 4, right: 4, bottom: 4, left: 4 }}>
+              <PolarGrid />
+              <PolarAngleAxis dataKey="subject" tick={{ fontSize: 10 }} />
+              <PolarRadiusAxis angle={30} domain={[0,10]} tick={{ fontSize: 9 }} />
+              <Radar name="前回" dataKey="value" stroke={RADAR_COLORS.last.stroke} fill={RADAR_COLORS.last.fill} fillOpacity={0.32} />
+              <Tooltip />
+            </RadarChart>
+          </ChartFrame>
+          <div className="text-[11px] whitespace-pre-wrap leading-5">
+            {selBean ? makeMultilineLabel(last, selBean, '前回', bestMetric) : '—'}
+          </div>
+        </div>
+      )}
     </div>
-
-    <ChartFrame aspect={1}>
-      <RadarChart
-        data={[
-          { subject: 'クリーンさ',  value: Number(last?.ratings?.clean)      || 0 },
-          { subject: '風味',        value: Number(last?.ratings?.flavor)     || 0 },
-          { subject: '酸味',        value: Number(last?.ratings?.acidity)    || 0 },
-          { subject: '苦味',        value: Number(last?.ratings?.bitterness) || 0 },
-          { subject: '甘味',        value: Number(last?.ratings?.sweetness)  || 0 },
-          { subject: 'コク',        value: Number(last?.ratings?.body)       || 0 },
-          { subject: '後味',        value: Number(last?.ratings?.aftertaste) || 0 },
-        ]}
-      >
-        <PolarGrid />
-        <PolarAngleAxis dataKey="subject" />
-        <PolarRadiusAxis angle={30} domain={[0, 10]} />
-        <Radar
-          name="前回"
-          dataKey="value"
-          stroke={RADAR_COLORS.last.stroke}
-          fill={RADAR_COLORS.last.fill}
-          fillOpacity={0.35}
-        />
-        <Tooltip />
-      </RadarChart>
-    </ChartFrame>
-
-    <div className="text-xs whitespace-pre-wrap leading-5">
-      {selBean ? makeMultilineLabel(last, selBean, '前回', bestMetric) : '—'}
-    </div>
-  </div>
-) : (
-  <div className="border rounded p-3 bg-white text-xs text-gray-500" key="last-empty">
-    前回：データなし
-  </div>
-)}
-
-            {/* 追加：平均 */}
-{Object.keys(beanAvgRatings || {}).length ? (
-  <div className="border rounded bg-white p-3 flex flex-col gap-2" key="avg">
-    <div className="text-sm font-semibold">平均（{metricJp(bestMetric)}）</div>
-
-    <ChartFrame aspect={1}>
-      <RadarChart
-        data={[
-          { subject: 'クリーンさ',  value: Number(beanAvgRatings.clean)      || 0 },
-          { subject: '風味',        value: Number(beanAvgRatings.flavor)     || 0 },
-          { subject: '酸味',        value: Number(beanAvgRatings.acidity)    || 0 },
-          { subject: '苦味',        value: Number(beanAvgRatings.bitterness) || 0 },
-          { subject: '甘味',        value: Number(beanAvgRatings.sweetness)  || 0 },
-          { subject: 'コク',        value: Number(beanAvgRatings.body)       || 0 },
-          { subject: '後味',        value: Number(beanAvgRatings.aftertaste) || 0 },
-        ]}
-      >
-        <PolarGrid />
-        <PolarAngleAxis dataKey="subject" />
-        <PolarRadiusAxis angle={30} domain={[0, 10]} />
-        <Radar
-          name="平均"
-          dataKey="value"
-          stroke={RADAR_COLORS.beanAvg.stroke}
-          fill={RADAR_COLORS.beanAvg.fill}
-          fillOpacity={0.35}
-        />
-        <Tooltip />
-      </RadarChart>
-    </ChartFrame>
-
-    <div className="text-xs text-gray-500">
-      直近の同豆ドリップ平均（7項目）
-    </div>
-  </div>
-) : (
-  <div className="border rounded p-3 bg-white text-xs text-gray-500" key="avg-empty">
-    平均：データなし
   </div>
 )}
 
