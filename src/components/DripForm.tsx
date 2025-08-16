@@ -477,9 +477,13 @@ if (!form.brew_date) {
   }
   const originTheoryText = ()=>{
   if(!selBean?.origin) return '—';
-  const cs = splitOrigins(selBean.origin);
+  const cs = String(selBean.origin).split(',').map(s=>s.trim()).filter(Boolean);
   const notes = cs
-    .map(c => ORIGIN_THEORIES[c] ? `${flagify(c)}：${ORIGIN_THEORIES[c]}` : '')
+    .map(c => {
+      const th = ORIGIN_THEORIES[c];
+      if (!th || /未指定|不明/.test(th)) return '';      // 未指定なら出さない
+      return `${flagify(c)}（${th}）`;
+    })
     .filter(Boolean);
   return notes.length ? notes.join(' ／ ') : '—';
 };
