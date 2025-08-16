@@ -1,5 +1,6 @@
 // src/components/MissingOrigins.tsx
 import React, { useEffect, useMemo, useState } from 'react'
+import { flagify } from '../utils/flags'
 import { STAR_SECTIONS, STAR_GROUPS, ORIGIN_TO_STAR } from '../constants/originGroups'
 
 type Bean = {
@@ -63,8 +64,10 @@ export default function MissingOrigins({API}:{API:string}){
               ) : (
                 <div className="flex flex-wrap gap-2">
                   {miss.map(o=>(
-                    <span key={o} className="text-xs px-2 py-1 bg-white border rounded">{o}</span>
-                  ))}
+   <span key={o} className="text-xs px-2 py-1 bg-white border rounded">
+      {flagify(o)}
+    </span>
+  ))}
                 </div>
               )}
             </div>
@@ -76,11 +79,11 @@ export default function MissingOrigins({API}:{API:string}){
       <details className="mt-3">
         <summary className="text-xs text-gray-600 cursor-pointer">在庫にある産地を確認</summary>
         <div className="mt-2 flex flex-wrap gap-2">
-          {[...ownedOrigins].map(o=>(
-            <span key={o} className="text-[11px] px-2 py-1 bg-white border rounded">
-              {o} <span className="text-gray-500">/ {ORIGIN_TO_STAR[o] ?? '（分類外）'}</span>
-            </span>
-          ))}
+           {[...ownedOrigins].map(o=>(
+    <span key={o} className="text-[11px] px-2 py-1 bg-white border rounded">
+      {flagify(o)} <span className="text-gray-500">/ {ORIGIN_TO_STAR[o] ?? '（分類外）'}</span>
+   </span>
+  ))}
         </div>
       </details>
     </div>
