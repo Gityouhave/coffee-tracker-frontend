@@ -904,7 +904,6 @@ export function DripForm({API, beans, onSaved}:{API:string; beans:any[]; onSaved
       )}
 
       </div>  {/* ← セオリー & 統計コンテナの閉じ。ここで止める。余計な `)}` は置かない */}
-          </div>
 
         {/* 豆ごとバー（抽出方法別平均） */}
         {hasStats && (
