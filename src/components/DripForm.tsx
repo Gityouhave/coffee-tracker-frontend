@@ -999,7 +999,6 @@ export function DripForm({API, beans, onSaved}:{API:string; beans:any[]; onSaved
             ) : (
               <div className="border rounded p-3 bg-white text-xs text-gray-500" key="avg-empty">平均：データなし</div>
             )}
-           </div>
 
         {/* 豆ごとバー（抽出方法別平均） */}
         {hasStats && (
