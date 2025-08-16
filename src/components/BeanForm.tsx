@@ -309,34 +309,37 @@ try { onSaved?.() } catch {}
           </select>
         </div>
 
-        {/* 産地（複数） */}
-        <div>
-          <label className="text-sm text-gray-600">産地（複数可・必須）</label>
-          <select
-            multiple
-            className="border rounded p-2 w-full h-28"
-            value={form.origins}
-            onChange={e=>{
-              const opts = Array.from(e.target.selectedOptions).map(o=>o.value)
-              handle('origins', opts)
-            }}
-            required
-          >
-            {ORIGINS.filter(o=>o!=='不明').map(o=> <option key={o} value={o}>{o}</option>)}
-            <option value="不明">不明</option>
-          </select>
+      {/* 産地（複数） */}
+<div>
+  <label className="text-sm text-gray-600">産地（複数可・必須）</label>
+  <select
+    multiple
+    className="border rounded p-2 w-full h-28"
+    value={form.origins}
+    onChange={(e)=>{
+      const opts = Array.from(e.target.selectedOptions).map(o=>o.value)
+      handle('origins', opts)
+    }}
+    required
+  >
+    {/* ▼ここを flagify に変更 */}
+    {ORIGINS.filter(o=>o!=='不明').map(o=> (
+      <option key={o} value={o}>{flagify(o)}</option>
+    ))}
+    <option value="不明">不明</option>
+  </select>
 
-          {/* 産地セオリー（あるものだけ） */}
-          {form.origins?.length>0 && (
-  <div className="mt-1 text-xs text-gray-600 space-y-1">
-    {form.origins.map((o:string)=>{
-      const th = ORIGIN_THEORIES[o];
-      if (!th || /未指定|不明/.test(th)) return null;   // 未指定/不明は出さない
-      return <div key={o}>産地セオリー：{flagify(o)}（{th}）</div>;
-    })}
-  </div>
-)}
-        </div>
+  {/* 産地セオリー（あるものだけ）…以下は既存のままでOK */}
+  {form.origins?.length>0 && (
+    <div className="mt-1 text-xs text-gray-600 space-y-1">
+      {form.origins.map((o:string)=>{
+        const th = ORIGIN_THEORIES[o];
+        if (!th || /未指定|不明/.test(th)) return null;   // 未指定/不明は出さない
+        return <div key={o}>産地セオリー：{flagify(o)}（{th}）</div>;
+      })}
+    </div>
+  )}
+</div>
 
         <div className="grid grid-cols-2 gap-2">
           <select className="border rounded p-2" value={form.process} onChange={e=>handle('process',e.target.value)} required>
