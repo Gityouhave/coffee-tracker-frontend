@@ -250,7 +250,7 @@ const [beanAvgRatings, setBeanAvgRatings] =
 
   // セレクト＆適用ボタン用
   type BestPattern = {
-    id: id: 'thisBean'|'sameRoast'|'originNear'
+    id: 'thisBean'|'sameRoast'|'originNear'
     label: string
     fields: Partial<{
       grind:number
