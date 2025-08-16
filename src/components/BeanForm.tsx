@@ -3,7 +3,7 @@ import React, { useEffect, useMemo, useState } from 'react'
 import { ORIGIN_THEORIES } from '../constants/originTheories'
 import { filterSortBeans, beanOptionLabel } from '../utils/beanFilters'
 import { ORIGINS } from '../constants/origins'
-import { flagify } from '../utils/flags'
+import { flagify, flagifyOriginLine } from '../utils/flags'
 
 const PROCESS_OPTIONS = [
   '不明','ナチュラル','ウォッシュド','ハニー','レッドハニー','イエローハニー','ホワイトハニー','スマトラ'
@@ -123,8 +123,8 @@ function FilterBar({
           setOriginFilter(v)
         }}
       >
-        {ORIGINS.filter(o=>o!=='不明').map(o=> <option key={o} value={o}>{o}</option>)}
-        <option value="不明">不明</option>
+     {ORIGINS.filter(o=>o!=='不明').map(o=> <option key={o} value={o}>{flagify(o)}</option>)}
+<option value="不明">不明</option>
       </select>
       <div className="flex items-center gap-2">
         <select className="rounded border p-2 flex-1" value={sortKey} onChange={e=>setSortKey(e.target.value as any)}>
@@ -328,12 +328,14 @@ try { onSaved?.() } catch {}
 
           {/* 産地セオリー（あるものだけ） */}
           {form.origins?.length>0 && (
-            <div className="mt-1 text-xs text-gray-600 space-y-1">
-              {form.origins.map((o:string)=> ORIGIN_THEORIES[o] ? (
-                <div key={o}>産地セオリー：{o}（{ORIGIN_THEORIES[o]}）</div>
-              ) : null)}
-            </div>
-          )}
+  <div className="mt-1 text-xs text-gray-600 space-y-1">
+    {form.origins.map((o:string)=>{
+      const th = ORIGIN_THEORIES[o];
+      if (!th || /未指定|不明/.test(th)) return null;   // 未指定/不明は出さない
+      return <div key={o}>産地セオリー：{flagify(o)}（{th}）</div>;
+    })}
+  </div>
+)}
         </div>
 
         <div className="grid grid-cols-2 gap-2">
@@ -416,8 +418,10 @@ try { onSaved?.() } catch {}
               const ppg = pricePerG(b)
               return (
                 <li key={b.id} className="flex items-center justify-between gap-3 rounded border p-2">
-                  <span className="truncate">{beanOptionLabel(b)}</span>
-<div className="flex items-center gap-2">
+<span className="truncate">
+  {b.name}（{flagifyOriginLine(b.origin || '')} / {b.roast_level}）
+</span>
+                <div className="flex items-center gap-2">
   <label className="text-xs inline-flex items-center gap-1">
     在庫:
     <button
