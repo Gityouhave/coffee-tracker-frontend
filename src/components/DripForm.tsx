@@ -26,6 +26,11 @@ const TASTE_KEYS = [
   { key:'flavor',     label:'風味' },
   { key:'overall',    label:'総合' },
 ] as const;
+// 評価8項目（保存は 1–10 の既存ルール）
+const RATING_KEYS = [
+  'overall','clean','flavor','acidity','bitterness','sweetness','body','aftertaste',
+] as const;
+type RatingKey = typeof RATING_KEYS[number];
 type TasteKey = typeof TASTE_KEYS[number]['key'];
 type ScopeKey = 'thisBean'|'sameRoast'|'originNear';
 
@@ -41,6 +46,23 @@ const withFlag = (country:string)=> (COUNTRY_FLAGS[country]||'') + country;
 const formatSecFriendly = (s?:number)=>{
   if(s==null || !Number.isFinite(s)) return '—';
   return s < 60 ? `${s}秒` : secToMMSS(s);
+};
+/** ±記号付きの温度Δ（℃） */
+const deltaTemp = (actual?:number|null, rec?:number|null) => {
+  if (!Number.isFinite(actual) || !Number.isFinite(rec)) return '';
+  const d = Number(actual) - Number(rec);
+  const s = (d>0? '+' : '') + (Math.round(d*10)/10) + '℃';
+  return `(${s})`;
+};
+
+/** ±記号付きの時間Δ（mm:ss） */
+const deltaTime = (actualSec?:number|null, recSec?:number|null) => {
+  if (!Number.isFinite(actualSec) || !Number.isFinite(recSec)) return '';
+  const d = Math.round(Number(actualSec) - Number(recSec));
+  const sign = d>0 ? '+' : '';
+  const abs = Math.abs(d);
+  const mm = Math.floor(abs/60), ss = abs%60;
+  return `(${sign}${mm}:${String(ss).padStart(2,'0')})`;
 };
 // === END: radar & flags helpers ===
 
@@ -131,6 +153,10 @@ const [dripDate, setDripDate] = useState<string>(
   const [radarData, setRadarData] = useState<any[]>([])
   // BEGIN: new states
 const [bestMetric, setBestMetric] = useState<TasteKey>('overall');
+  // 味評価の適用トグル（デフォルト：全部ON）
+const [applyRatingKeys, setApplyRatingKeys] = useState<Record<RatingKey, boolean>>(
+  () => Object.fromEntries(RATING_KEYS.map(k => [k, true])) as any
+);
 const [visibleScopes, setVisibleScopes] = useState<Record<ScopeKey, boolean>>({
   thisBean: true, sameRoast: true, originNear: true
 });
@@ -167,26 +193,26 @@ const [beanAvgRatings, setBeanAvgRatings] =
 
   // 前回値適用
   const applyLast = () => {
-    if (!last) return
-    const f = (v:any)=> (v===undefined || v===null || v==='' ? undefined : v)
-    setForm((s:any)=> ({
-      ...s,
-      grind:        s.grind        ?? f(last.grind),
-      water_temp_c: s.water_temp_c ?? f(last.water_temp_c),
-      dose_g:       s.dose_g       ?? f(last.dose_g),
-      water_g:      s.water_g      ?? f(last.water_g),
-      drawdown_g:   s.drawdown_g   ?? f(last.drawdown_g),
-      time:         s.time         ?? (last.time_sec!=null ? secToMMSS(last.time_sec) : undefined),
-      dripper:      s.dripper      ?? f(last.dripper),
-      storage:      s.storage      ?? f(last.storage),
-    }))
-  }
+  if (!last) return;
+  // last を applyFromDrip に渡すため、ratings 付きの形に揃える
+  const lastNormalized = { ...last, ratings: last.ratings || {} };
+  applyFromDrip(lastNormalized);
+}
 
   // 暫定最適値適用
-  const applyBest = () => {
-    const pat = bestPatterns.find(p => p.id === selectedPatternId) || bestPatterns[0]
-    if (!pat) return
-    const f = (v:any)=> (v===undefined || v===null || v==='' ? undefined : v)
+ const applyBest = () => {
+  const pat = bestPatterns.find(p => p.id === selectedPatternId) || bestPatterns[0];
+  if (!pat) return;
+  // pat.fields は条件だけなので、対応する drip 本体を拾える場合はそちらを優先
+  const src =
+    selectedPatternId==='sameRoast' ? bestSameRoast :
+    selectedPatternId==='originNear' ? bestOriginNear : null;
+
+  if (src) {
+    applyFromDrip(src);
+  } else {
+    // フォールバック：fields を反映（味評価は無し）
+    const f = (v:any)=> (v===undefined || v===null || v==='' ? undefined : v);
     setForm((s:any)=> ({
       ...s,
       grind:        s.grind        ?? f(pat.fields.grind),
@@ -197,22 +223,37 @@ const [beanAvgRatings, setBeanAvgRatings] =
       time:         s.time         ?? f(pat.fields.time),
       dripper:      s.dripper      ?? f(pat.fields.dripper),
       storage:      s.storage      ?? f(pat.fields.storage),
-    }))
+    }));
   }
-  // BEGIN: applyFromDrip
+}
+ // BEGIN: applyFromDrip
 const applyFromDrip = (d:any) => {
   if(!d) return;
-  setForm((s:any)=> ({
-    ...s,
-    grind:        d.grind        ?? s.grind,
-    water_temp_c: d.water_temp_c ?? s.water_temp_c,
-    dose_g:       d.dose_g       ?? s.dose_g,
-    water_g:      d.water_g      ?? s.water_g,
-    drawdown_g:   d.drawdown_g   ?? s.drawdown_g,
-    time:         d.time_sec!=null ? secToMMSS(d.time_sec) : s.time,
-    dripper:      d.dripper ?? s.dripper,
-    storage:      d.storage ?? s.storage,
-  }))
+  setForm((s:any)=> {
+    // 既存条件
+    const next:any = {
+      ...s,
+      grind:        d.grind        ?? s.grind,
+      water_temp_c: d.water_temp_c ?? s.water_temp_c,
+      dose_g:       d.dose_g       ?? s.dose_g,
+      water_g:      d.water_g      ?? s.water_g,
+      drawdown_g:   d.drawdown_g   ?? s.drawdown_g,
+      time:         d.time_sec!=null ? secToMMSS(d.time_sec) : s.time,
+      dripper:      d.dripper ?? s.dripper,
+      storage:      d.storage ?? s.storage,
+      ratings:      { ...(s.ratings||{}) },
+    };
+
+    // 味評価の反映（チェックされているものだけ）
+    const src = d.ratings || {};
+    for (const k of RATING_KEYS) {
+      if (applyRatingKeys[k] && src[k]!=null && src[k]!=='') {
+        // 保持形式に合わせて 1–10 のまま文字列に
+        next.ratings[k] = String(src[k]);
+      }
+    }
+    return next;
+  })
 }
 // END: applyFromDrip
 
@@ -343,30 +384,42 @@ const applyFromDrip = (d:any) => {
         dripper: d.dripper ?? null,
         storage: d.storage ?? null,
       }) : {}
-      // BEGIN: mkLabelSub
-const mkLabelSub = (d:any)=>{
-  const parts = [
-    d.roast_level ? `焙煎度:${d.roast_level}`:null,
-    Number.isFinite(d.grind)?`挽き:${d.grind}`:null,
-    Number.isFinite(d.water_temp_c)?`湯温:${d.water_temp_c}℃`:null,
-    Number.isFinite(d.dose_g)?`豆:${d.dose_g}g`:null,
-    Number.isFinite(d.water_g)?`湯量:${d.water_g}g`:null,
-    Number.isFinite(d.time_sec)?`時間:${secToMMSS(d.time_sec)}`:null,
-  ].filter(Boolean).join(' / ')
-  return parts
+      // BEGIN: mkLabelSub（統一フォーマット）
+const mkLabelSub = (d:any, bean:any, deriveFor?:any)=>{
+  const countryFlags = flagifyOriginList(bean?.origin || '');
+  const age = (() => {
+    const roastDate = bean?.roast_date || bean?.roasted_on || bean?.purchase_date || bean?.purchased_on;
+    const brewDate  = d?.brew_date;
+    const n = daysBetween(roastDate, brewDate);
+    return Number.isFinite(n) ? `${n}日目` : '—';
+  })();
+
+  const recTemp = deriveFor?.temp?.recommended_c ?? null;
+  const recSec  = deriveFor?.time?.recommended_sec ?? null;
+
+  const head = `${bean?.name||'—'}（${countryFlags||'—'}｜${bean?.roast_level||'—'}｜${age}） ／ ${d?.dripper||'—'}：`;
+  const body = [
+    Number.isFinite(d?.grind) ? `挽き${d.grind}${d?.derive?.grind?.label20 ? `（${d.derive.grind.label20}）`:''}` : null,
+    Number.isFinite(d?.water_temp_c) ? `湯温${d.water_temp_c}℃${deltaTemp(d.water_temp_c, recTemp)}` : null,
+    Number.isFinite(d?.dose_g) ? `豆${d.dose_g}g` : null,
+    Number.isFinite(d?.water_g) ? `湯量${d.water_g}g` : null,
+    Number.isFinite(d?.time_sec) ? `時間${secToMMSS(d.time_sec)}${deltaTime(d.time_sec, recSec)}` : null,
+  ].filter(Boolean).join('・');
+
+  return `${head}${body}`;
 }
 // END: mkLabelSub
-      const pats: BestPattern[] = []
-      if (bestSR) pats.push({
+    const pats: BestPattern[] = [];
+if (bestSR) pats.push({
   id:'sameRoast',
-  label:`同焙煎度ベスト（★${bestSR.ratings?.overall ?? '-'} / ${bestSR.brew_date} / ${bestSR.dripper ?? '—'} / ${mkLabelSub(bestSR)}）`,
+  label: mkLabelSub(bestSR, targetBean, derive),  // ←統一表示
   fields: mkFields(bestSR)
-})
+});
 if (bestON) pats.push({
   id:'originNear',
-  label:`同産地×近焙煎度ベスト（★${bestON.ratings?.overall ?? '-'} / ${bestON.brew_date} / ${bestON.dripper ?? '—'} / ${mkLabelSub(bestON)}）`,
+  label: mkLabelSub(bestON, targetBean, derive),  // ←統一表示
   fields: mkFields(bestON)
-})
+});
       setBestPatterns(pats)
       setSelectedPatternId(pats[0]?.id || '')
 
@@ -763,6 +816,23 @@ const RatingSelect = ({
   </div>
 )}
 // END: radar block
+        {/* 味評価の適用トグル */}
+<div className="flex flex-wrap items-center gap-2 text-xs">
+  <span>味評価も適用：</span>
+  {RATING_KEYS.map(k=>(
+    <label key={k} className="inline-flex items-center gap-1">
+      <input
+        type="checkbox"
+        checked={applyRatingKeys[k]}
+        onChange={e=>setApplyRatingKeys(s=>({ ...s, [k]: e.target.checked }))}
+      />
+      <span>{(
+        {overall:'総合',clean:'クリーン',flavor:'風味',acidity:'酸味',
+         bitterness:'苦味',sweetness:'甘味',body:'コク',aftertaste:'後味'} as any
+      )[k]}</span>
+    </label>
+  ))}
+</div>
         {/* BEGIN: apply best buttons */}
 <div className="flex flex-wrap items-center gap-2 text-xs">
   <span>この条件を反映：</span>
