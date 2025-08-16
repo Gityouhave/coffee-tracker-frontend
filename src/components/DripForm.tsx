@@ -982,147 +982,116 @@ export function DripForm({API, beans, onSaved}:{API:string; beans:any[]; onSaved
         </div>
       </div>
 
-      {/* 入力群 */}
-<div className="grid grid-cols-3 gap-2">
-  {/* 挽き目 */}
-  <div>
-    <div className="text-[11px] text-gray-500 mb-1">
-      目安（焙煎度基準）：{ form.bean_id ? (
-        <>粗 {derive?.grind?.markers_for_roast?.['粗'] ?? '—'} / 中粗 {derive?.grind?.markers_for_roast?.['中粗'] ?? '—'} / 中 {derive?.grind?.markers_for_roast?.['中'] ?? '—'} / 中細 {derive?.grind?.markers_for_roast?.['中細'] ?? '—'} / 細 {derive?.grind?.markers_for_roast?.['細'] ?? '—'} / 極細 {derive?.grind?.markers_for_roast?.['極細'] ?? '—'}</>
-      ) : '--' }
-    </div>
-    <input
-      className="border rounded p-2 w-full"
-      placeholder="挽き目 (1~17)"
-      value={form.grind||''}
-      onChange={e=>handle('grind',e.target.value)}
-    />
-    <div className="text-xs text-gray-600 mt-1">
-      挽き目表記：<b>{(form.bean_id && form.grind) ? (derive?.grind?.label20 ?? '—') : '--'}</b>
-    </div>
-  </div>
+         {/* 入力群 */}
+      {/* 3カラム：挽き目 / 湯温 / ドリッパー */}
+      <div className="grid grid-cols-3 gap-2">
+        {/* 挽き目 */}
+        <div>
+          <div className="text-[11px] text-gray-500 mb-1">
+            目安（焙煎度基準）：{ form.bean_id ? (
+              <>粗 {derive?.grind?.markers_for_roast?.['粗'] ?? '—'} / 中粗 {derive?.grind?.markers_for_roast?.['中粗'] ?? '—'} / 中 {derive?.grind?.markers_for_roast?.['中'] ?? '—'} / 中細 {derive?.grind?.markers_for_roast?.['中細'] ?? '—'} / 細 {derive?.grind?.markers_for_roast?.['細'] ?? '—'} / 極細 {derive?.grind?.markers_for_roast?.['極細'] ?? '—'}</>
+            ) : '--' }
+          </div>
 
-  {/* 湯温 */}
-  <div>
-    <div className="text-xs text-gray-600 mb-1">
-      推奨湯温：{showOrDash(!!form.bean_id, derive?.temp?.recommended_c)}℃
-    </div>
-    <input
-      className="border rounded p-2 w-full"
-      placeholder="湯温 (℃)"
-      value={form.water_temp_c||''}
-      onChange={e=>handle('water_temp_c',e.target.value)}
-    />
-    <div className="text-xs text-gray-600 mt-1">
-      Δ：{(form.bean_id && form.water_temp_c) ? (derive?.temp?.delta_from_input ?? '—') : '--'}
-    </div>
-  </div>
+          <input
+            className="border rounded p-2 w-full"
+            placeholder="挽き目 (1~17)"
+            value={form.grind||''}
+            onChange={e=>handle('grind',e.target.value)}
+          />
 
-  // ----- 推奨ドリッパー計算（上に配置）-----
-{(() => {
-  const byMethod = Array.isArray(beanStats?.by_method) ? beanStats.by_method
-    .map((x:any)=> ({ dripper: String(x.dripper), avg_overall: Number(x.avg_overall)||0 }))
-    .filter(x=> !!x.dripper) : [];
+          <div className="text-xs text-gray-600 mt-1">
+            挽き目表記：<b>{(form.bean_id && form.grind) ? (derive?.grind?.label20 ?? '—') : '--'}</b>
+          </div>
+        </div>
 
-  // スコープ実績からドリッパー名を抽出
-  const bestFromScopes: string[] = [];
-  const s = bestByScopeMetric;
-  const m = bestMetric;
-  if (s?.thisBean?.[m]?.dripper) bestFromScopes.push(String(s.thisBean[m].dripper));
-  if (s?.sameRoast?.[m]?.dripper) bestFromScopes.push(String(s.sameRoast[m].dripper));
-  if (s?.originNear?.[m]?.dripper) bestFromScopes.push(String(s.originNear[m].dripper));
+        {/* 湯温 */}
+        <div>
+          {/* ↑ 推奨（上） */}
+          <div className="text-xs text-gray-600 mb-1">
+            推奨湯温：{showOrDash(!!form.bean_id, derive?.temp?.recommended_c)}℃
+          </div>
 
-  // 推奨実行
-  const rec = recommendDripper({
-    roast_level: selBean?.roast_level || null,
-    process: selBean?.process || derive?.theory?.process || null,
-    deriveTheoryDripper: derive?.theory?.dripper || null,
-    bestMetric,
-    bestDrippersFromScopes: bestFromScopes as any,
-    byMethod: byMethod as any,
-    allowNonDrip: false,
-  });
+          <input
+            className="border rounded p-2 w-full"
+            placeholder="湯温 (℃)"
+            value={form.water_temp_c||''}
+            onChange={e=>handle('water_temp_c',e.target.value)}
+          />
 
-  // スコア差（選択がある場合）
-  const selected = String(form.dripper || '');
-  const topScore = rec.ranked[0]?.score ?? 0;
-  const selScore = selected
-    ? (rec.ranked.find(r=> r.name === selected)?.score ?? 0)
-    : 0;
-  const diff = (topScore - selScore);
+          {/* ↓ 差分（下） */}
+          <div className="text-xs text-gray-600 mt-1">
+            Δ：{(form.bean_id && form.water_temp_c) ? (derive?.temp?.delta_from_input ?? '—') : '--'}
+          </div>
+        </div>
 
-  return (
-    <div className="mb-2">
-      <div className="text-xs text-gray-600 mb-1">
-        推奨ドリッパー：<b>{rec.primary || '—'}</b>
-        <span className="ml-2 text-[11px] text-gray-500">（{rec.ranked.slice(0,3).map(r=>r.name).join(' / ')}）</span>
+        {/* ドリッパー */}
+        <div>
+          <select
+            className="border rounded p-2 w-full"
+            value={form.dripper||''}
+            onChange={e=>handle('dripper',e.target.value)}
+          >
+            <option value="">ドリッパー</option>
+            {['水出し','エアロプレス','クレバー','ハリオスイッチ','ハリオ','フラワー','クリスタル','カリタウェーブ','ブルーボトル','コーノ','フィン','ネル','フレンチプレス','エスプレッソ','モカポット','サイフォン'].map(x=> <option key={x}>{x}</option>)}
+          </select>
+          <div className="text-xs text-gray-600 mt-1">
+            ドリッパー理論：{ form.dripper ? (derive?.theory?.dripper ?? '—') : '--' }
+          </div>
+        </div>
       </div>
 
-      {/* セレクト（中央） */}
-      <select
-        className="border rounded p-2 w-full"
-        value={form.dripper||''}
-        onChange={e=>handle('dripper',e.target.value)}
-      >
-        <option value="">ドリッパー</option>
-        {['水出し','エアロプレス','クレバー','ハリオスイッチ','ハリオ','フラワー','クリスタル','カリタウェーブ','ブルーボトル','コーノ','フィン','ネル','フレンチプレス','エスプレッソ','モカポット','サイフォン'].map(x=> (
-          <option key={x} value={x}>{x}</option>
-        ))}
-      </select>
+      {/* 3カラム：豆量 / 湯量 / 落ちきり量 */}
+      <div className="grid grid-cols-3 gap-2">
+        {/* 豆量 */}
+        <div>
+          <div className="text-xs text-gray-600 mb-1">
+            推奨レシオ：{showOrDash(!!form.bean_id, derive?.ratio?.recommended_ratio)}倍
+          </div>
 
-      {/* 差分（下） */}
-      <div className="text-xs text-gray-600 mt-1">
-        選択との差分：{selected
-          ? (selected === rec.primary ? '一致' : `非一致（推奨との差スコア ${diff.toFixed(3)}）`)
-          : '—'}
+          <input
+            className="border rounded p-2 w-full"
+            placeholder="豆 (g)"
+            value={form.dose_g||''}
+            onChange={e=>handle('dose_g',e.target.value)}
+          />
+
+          <div className="text-[11px] text-gray-500 mt-1">
+            最大推奨量：{showOrDash(!!form.bean_id, derive?.dose?.max_recommended_g)}
+          </div>
+          {/* 差分は無し（比率なので） */}
+        </div>
+
+        {/* 湯量 */}
+        <div>
+          {/* ↑ 推奨（上） */}
+          <div className="text-xs text-gray-600 mb-1">
+            推奨湯量：{ (form.bean_id && form.dose_g) ? (derive?.ratio?.recommended_water_g ?? '—') : '--' }g
+          </div>
+
+          <input
+            className="border rounded p-2 w-full"
+            placeholder="湯量 (g)"
+            value={form.water_g||''}
+            onChange={e=>handle('water_g',e.target.value)}
+          />
+
+          {/* ↓ 差分（下） */}
+          <div className="text-xs text-gray-600 mt-1">
+            Δ：{ (form.bean_id && form.dose_g && form.water_g) ? (derive?.ratio?.delta_from_input ?? '—') : '--' }
+          </div>
+        </div>
+
+        {/* 落ちきり量 */}
+        <div>
+          <input
+            className="border rounded p-2 w-full"
+            placeholder="落ちきり量 (g)"
+            value={form.drawdown_g||''}
+            onChange={e=>handle('drawdown_g',e.target.value)}
+          />
+        </div>
       </div>
-    </div>
-  );
-})()}
-
-<div className="grid grid-cols-3 gap-2">
-  {/* 豆量 */}
-  <div>
-    <div className="text-xs text-gray-600 mb-1">
-      推奨レシオ：{showOrDash(!!form.bean_id, derive?.ratio?.recommended_ratio)}倍
-    </div>
-    <input
-      className="border rounded p-2 w-full"
-      placeholder="豆 (g)"
-      value={form.dose_g||''}
-      onChange={e=>handle('dose_g',e.target.value)}
-    />
-    <div className="text-[11px] text-gray-500 mt-1">
-      最大推奨量：{showOrDash(!!form.bean_id, derive?.dose?.max_recommended_g)}
-    </div>
-  </div>
-
-  {/* 湯量 */}
-  <div>
-    <div className="text-xs text-gray-600 mb-1">
-      推奨湯量：{ (form.bean_id && form.dose_g) ? (derive?.ratio?.recommended_water_g ?? '—') : '--' }g
-    </div>
-    <input
-      className="border rounded p-2 w-full"
-      placeholder="湯量 (g)"
-      value={form.water_g||''}
-      onChange={e=>handle('water_g',e.target.value)}
-    />
-    <div className="text-xs text-gray-600 mt-1">
-      Δ：{ (form.bean_id && form.dose_g && form.water_g) ? (derive?.ratio?.delta_from_input ?? '—') : '--' }
-    </div>
-  </div>
-
-  {/* 落ちきり量 */}
-  <div>
-    <input
-      className="border rounded p-2 w-full"
-      placeholder="落ちきり量 (g)"
-      value={form.drawdown_g||''}
-      onChange={e=>handle('drawdown_g',e.target.value)}
-    />
-  </div>
-</div>
 
 <div className="grid grid-cols-2 gap-2">
   {/* 抽出時間 */}
