@@ -1183,7 +1183,6 @@ export function DripForm({API, beans, onSaved}:{API:string; beans:any[]; onSaved
 </div>
 
       {/* 3カラム：豆量 / 湯量 / 落ちきり量 */}
-        </div>
       <div className="grid grid-cols-3 gap-2">
         {/* 豆量 */}
         <div>
