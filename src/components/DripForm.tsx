@@ -735,62 +735,76 @@ const RatingSelect = ({
       </div>
 
       {(last || bestPatterns.length>0) && (
-        <div className="text-xs flex flex-col gap-2 sm:flex-row sm:items-center sm:gap-3">
-          {last && (
-            <>
-              <span className="text-gray-600">
-                前回：{mkLabelSub(last, selBean)}
-              </span>
-              <button type="button" onClick={applyLast} className="px-2 py-1 rounded border bg-white hover:bg-gray-50">
-                前回値を適用
-              </button>
-            </>
-          )}
+  <div className="text-xs flex flex-col gap-2 sm:flex-row sm:items-center sm:gap-3">
+    {last && (
+      <>
+        <span className="text-gray-600">
+          前回：{mkLabelSub(last, selBean)}
+        </span>
+        <button
+          type="button"
+          onClick={applyLast}
+          className="px-2 py-1 rounded border bg-white hover:bg-gray-50"
+        >
+          前回値を適用
+        </button>
+      </>
+    )}
 
-          {bestPatterns.length>0 && (
-            <div className="flex items-center gap-2">
-              <select className="border rounded p-1" value={selectedPatternId} onChange={e=>setSelectedPatternId(e.target.value as any)}>
-                {bestPatterns.map(p=>(
-                  <option key={p.id} value={p.id}>{p.label}</option>
-                ))}
-              </select>
-              <button type="button" onClick={applyBest} className="px-2 py-1 rounded border bg-white hover:bg-gray-50">
-                暫定最適値を適用
-              </button>
-            </div>
-          )}
-        </div>
-      <div className="flex items-center gap-1 flex-wrap mt-1">
-  <span className="ml-1 text-gray-600">味評価の反映：</span>
-  {RATING_KEYS.map(k=>(
-    <label key={k} className="inline-flex items-center gap-1 mr-1">
-      <input
-        type="checkbox"
-        checked={applyRatingKeys[k]}
-        onChange={e=>setApplyRatingKeys(s=>({...s,[k]:e.target.checked}))}
-      />
-      <span>{k==='overall'?'総合'
-        :k==='clean'?'クリーンさ'
-        :k==='flavor'?'風味'
-        :k==='acidity'?'酸味'
-        :k==='bitterness'?'苦味'
-        :k==='sweetness'?'甘味'
-        :k==='body'?'コク'
-        :'後味'}</span>
-    </label>
-  ))}
-  <button
-    type="button"
-    className="ml-2 px-1.5 py-0.5 border rounded"
-    onClick={()=>setApplyRatingKeys(Object.fromEntries(RATING_KEYS.map(k=>[k,true])) as any)}
-  >全選択</button>
-  <button
-    type="button"
-    className="px-1.5 py-0.5 border rounded"
-    onClick={()=>setApplyRatingKeys(Object.fromEntries(RATING_KEYS.map(k=>[k,false])) as any))}
-  >全解除</button>
-</div>
-      )}
+    {bestPatterns.length>0 && (
+      <div className="flex items-center gap-2">
+        <select
+          className="border rounded p-1"
+          value={selectedPatternId}
+          onChange={e=>setSelectedPatternId(e.target.value as any)}
+        >
+          {bestPatterns.map(p=>(
+            <option key={p.id} value={p.id}>{p.label}</option>
+          ))}
+        </select>
+        <button
+          type="button"
+          onClick={applyBest}
+          className="px-2 py-1 rounded border bg-white hover:bg-gray-50"
+        >
+          暫定最適値を適用
+        </button>
+      </div>
+    )}
+
+    {/* ← このトグルを同じ親divの内側に移動 */}
+    <div className="flex items-center gap-1 flex-wrap mt-1 sm:ml-2">
+      <span className="ml-1 text-gray-600">味評価の反映：</span>
+      {RATING_KEYS.map(k=>(
+        <label key={k} className="inline-flex items-center gap-1 mr-1">
+          <input
+            type="checkbox"
+            checked={applyRatingKeys[k]}
+            onChange={e=>setApplyRatingKeys(s=>({...s,[k]:e.target.checked}))}
+          />
+          <span>{k==='overall'?'総合'
+            :k==='clean'?'クリーンさ'
+            :k==='flavor'?'風味'
+            :k==='acidity'?'酸味'
+            :k==='bitterness'?'苦味'
+            :k==='sweetness'?'甘味'
+            :k==='body'?'コク'
+            :'後味'}</span>
+        </label>
+      ))}
+      <button
+        type="button"
+        className="ml-2 px-1.5 py-0.5 border rounded"
+        onClick={()=>setApplyRatingKeys(Object.fromEntries(RATING_KEYS.map(k=>[k,true])) as any)}
+      >全選択</button>
+      <button
+        type="button"
+        className="px-1.5 py-0.5 border rounded"
+        onClick={()=>setApplyRatingKeys(Object.fromEntries(RATING_KEYS.map(k=>[k,false])) as any)}
+      >全解除</button>
+    </div>
+  </div>
+)}
 
       {/* エイジング日数 */}
       <div className="text-xs text-gray-700">
