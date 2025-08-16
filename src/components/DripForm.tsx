@@ -10,6 +10,19 @@ import { flagify, flagifyOriginList, splitOrigins } from '../utils/flags'
 import { filterSortBeans, beanOptionLabel, ROASTS } from '../utils/beanFilters'
 import { ORIGINS } from '../constants/origins'
 import { ORIGIN_THEORIES } from '../constants/originTheories'
+// ファイル先頭付近（importの下あたり）に追加
+const ChartFrame: React.FC<React.PropsWithChildren<{ aspect?: number; className?: string }>> = ({ aspect = 1, className, children }) => {
+  // aspect比で高さを決める共通枠。親の幅に応じて自動で高さ調整。
+  return (
+    <div className={`relative w-full ${className||''}`} style={{ aspectRatio: String(aspect) }}>
+      <div className="absolute inset-0">
+        <ResponsiveContainer width="100%" height="100%">
+          {children as any}
+        </ResponsiveContainer>
+      </div>
+    </div>
+  );
+};
 type ScopeKey = 'thisBean'|'sameRoast'|'originNear';
 
 const scopeTitle = (s: ScopeKey) =>
@@ -863,7 +876,7 @@ export function DripForm({API, beans, onSaved}:{API:string; beans:any[]; onSaved
             </select>
           </div>
 
-         <div className="grid gap-3 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5">
+         <div className="grid gap-3 [grid-template-columns:repeat(auto-fit,minmax(260px,1fr))]">
             {(['thisBean','sameRoast','originNear'] as ScopeKey[]).map(scope => {
               const d = bestByScopeMetric?.[scope]?.[bestMetric];
               const title = scopeTitle(scope);
@@ -904,18 +917,15 @@ export function DripForm({API, beans, onSaved}:{API:string; beans:any[]; onSaved
                     </button>
                   </div>
 
-                  <div className="h-56">
-                    <ResponsiveContainer>
-                      <RadarChart data={radarData}>
-                        <PolarGrid />
-                        <PolarAngleAxis dataKey="subject" />
-                        <PolarRadiusAxis angle={30} domain={[0,10]} />
-                        <Radar name={title} dataKey="value"
-                          stroke={color.stroke} fill={color.fill} fillOpacity={0.35} />
-                        <Tooltip />
-                      </RadarChart>
-                    </ResponsiveContainer>
-                  </div>
+                 <ChartFrame aspect={1}>
+  <RadarChart data={radarData} margin={{ top: 8, right: 8, bottom: 8, left: 8 }}>
+    <PolarGrid />
+    <PolarAngleAxis dataKey="subject" tick={{ fontSize: 12 }} />
+    <PolarRadiusAxis angle={30} domain={[0,10]} tick={{ fontSize: 10 }} />
+    <Radar name={title} dataKey="value" stroke={color.stroke} fill={color.fill} fillOpacity={0.35} />
+    <Tooltip />
+  </RadarChart>
+</ChartFrame>
 
                   <div className="text-xs whitespace-pre-wrap leading-5">
                     {makeMultilineLabel(d, bean, title, bestMetric)}
@@ -940,26 +950,18 @@ export function DripForm({API, beans, onSaved}:{API:string; beans:any[]; onSaved
                     この値を適用
                   </button>
                 </div>
-                <div className="h-56">
-                  <ResponsiveContainer>
-                    <RadarChart data={[
-                      {subject:'クリーンさ',  value:Number(last?.ratings?.clean)||0},
-                      {subject:'風味',        value:Number(last?.ratings?.flavor)||0},
-                      {subject:'酸味',        value:Number(last?.ratings?.acidity)||0},
-                      {subject:'苦味',        value:Number(last?.ratings?.bitterness)||0},
-                      {subject:'甘味',        value:Number(last?.ratings?.sweetness)||0},
-                      {subject:'コク',        value:Number(last?.ratings?.body)||0},
-                      {subject:'後味',        value:Number(last?.ratings?.aftertaste)||0},
-                    ]}>
-                      <PolarGrid />
-                      <PolarAngleAxis dataKey="subject" />
-                      <PolarRadiusAxis angle={30} domain={[0,10]} />
-                      <Radar name="前回" dataKey="value"
-                        stroke={RADAR_COLORS.last.stroke} fill={RADAR_COLORS.last.fill} fillOpacity={0.35} />
-                      <Tooltip />
-                    </RadarChart>
-                  </ResponsiveContainer>
-                </div>
+
+                <ChartFrame aspect={1}>
+  <RadarChart data={[ /* ... */ ]}>
+    <PolarGrid />
+    <PolarAngleAxis dataKey="subject" />
+    <PolarRadiusAxis angle={30} domain={[0,10]} />
+    <Radar name="前回" dataKey="value"
+      stroke={RADAR_COLORS.last.stroke} fill={RADAR_COLORS.last.fill} fillOpacity={0.35} />
+    <Tooltip />
+  </RadarChart>
+</ChartFrame>
+                
                 <div className="text-xs whitespace-pre-wrap leading-5">
                   {selBean ? makeMultilineLabel(last, selBean, '前回', bestMetric) : '—'}
                 </div>
@@ -972,25 +974,27 @@ export function DripForm({API, beans, onSaved}:{API:string; beans:any[]; onSaved
             {Object.keys(beanAvgRatings||{}).length ? (
               <div className="border rounded bg-white p-3 flex flex-col gap-2" key="avg">
                 <div className="text-sm font-semibold">平均（{metricJp(bestMetric)}）</div>
-                <div className="h-56">
-                  <ResponsiveContainer>
-                    <RadarChart data={[
-                      {subject:'クリーンさ',  value:Number(beanAvgRatings.clean)||0},
-                      {subject:'風味',        value:Number(beanAvgRatings.flavor)||0},
-                      {subject:'酸味',        value:Number(beanAvgRatings.acidity)||0},
-                      {subject:'苦味',        value:Number(beanAvgRatings.bitterness)||0},
-                      {subject:'甘味',        value:Number(beanAvgRatings.sweetness)||0},
-                      {subject:'コク',        value:Number(beanAvgRatings.body)||0},
-                      {subject:'後味',        value:Number(beanAvgRatings.aftertaste)||0},
-                    ]}>
-                      <PolarGrid />
-                      <PolarAngleAxis dataKey="subject" />
-                      <PolarRadiusAxis angle={30} domain={[0,10]} />
-                      <Radar name="平均" dataKey="value"
-                        stroke={RADAR_COLORS.beanAvg.stroke} fill={RADAR_COLORS.beanAvg.fill} fillOpacity={0.35} />
-                      <Tooltip />
-                    </RadarChart>
-                  </ResponsiveContainer>
+                
+                <ChartFrame aspect={1}>
+  <RadarChart data={[ /* ... */ ]}>
+    <PolarGrid />
+    <PolarAngleAxis dataKey="subject" />
+    <PolarRadiusAxis angle={30} domain={[0,10]} />
+    <Radar name="平均" dataKey="value"
+      stroke={RADAR_COLORS.beanAvg.stroke} fill={RADAR_COLORS.beanAvg.fill} fillOpacity={0.35} />
+    <Tooltip />
+  </RadarChart>
+</ChartFrame><ChartFrame aspect={1}>
+  <RadarChart data={[ /* ... */ ]}>
+    <PolarGrid />
+    <PolarAngleAxis dataKey="subject" />
+    <PolarRadiusAxis angle={30} domain={[0,10]} />
+    <Radar name="平均" dataKey="value"
+      stroke={RADAR_COLORS.beanAvg.stroke} fill={RADAR_COLORS.beanAvg.fill} fillOpacity={0.35} />
+    <Tooltip />
+  </RadarChart>
+</ChartFrame>
+                  
                 </div>
                 <div className="text-xs text-gray-500">
                   直近の同豆ドリップ平均（7項目）
@@ -1007,18 +1011,16 @@ export function DripForm({API, beans, onSaved}:{API:string; beans:any[]; onSaved
           </div>
         )}
         {hasByMethod && showSection.byMethod && (
-          <div className="h-40">
-            <ResponsiveContainer>
-              <BarChart data={beanStats.by_method}>
-                <CartesianGrid strokeDasharray="3 3" />
-                <XAxis dataKey="dripper" />
-                <YAxis />
-                <Tooltip />
-                <Legend />
-                <Bar dataKey="avg_overall" />
-              </BarChart>
-            </ResponsiveContainer>
-          </div>
+         <ChartFrame aspect={4/3}>
+  <BarChart data={beanStats.by_method} margin={{ top: 8, right: 16, bottom: 8, left: 0 }}>
+    <CartesianGrid strokeDasharray="3 3" />
+    <XAxis dataKey="dripper" tick={{ fontSize: 12 }} />
+    <YAxis tick={{ fontSize: 12 }} />
+    <Tooltip />
+    <Legend />
+    <Bar dataKey="avg_overall" />
+  </BarChart>
+</ChartFrame>
         )}
 
         {/* 相関 */}
@@ -1040,17 +1042,15 @@ export function DripForm({API, beans, onSaved}:{API:string; beans:any[]; onSaved
                 湯温差（実測−推奨） vs {yAccessor.label}
                 <span className="ml-2 text-xs text-gray-500">r={rTempBean ?? '—'}</span>
               </div>
-              <div className="h-44">
-                <ResponsiveContainer>
-                  <ScatterChart>
-                    <CartesianGrid />
-                    <XAxis dataKey="_deltas.temp_delta" name="tempΔ(°C)" />
-                    <YAxis dataKey={yAccessor.key} name={yAccessor.label} />
-                    <Tooltip />
-                    <Scatter name="drips" data={beanDrips} />
-                  </ScatterChart>
-                </ResponsiveContainer>
-              </div>
+              <ChartFrame aspect={4/3}>
+  <ScatterChart margin={{ top: 8, right: 16, bottom: 8, left: 0 }}>
+    <CartesianGrid />
+    <XAxis dataKey="_deltas.temp_delta" name="tempΔ(°C)" tick={{ fontSize: 12 }} />
+    <YAxis dataKey={yAccessor.key} name={yAccessor.label} tick={{ fontSize: 12 }} />
+    <Tooltip />
+    <Scatter name="drips" data={beanDrips} />
+  </ScatterChart>
+</ChartFrame>
             </div>
           )}
         </div>
@@ -1063,17 +1063,17 @@ export function DripForm({API, beans, onSaved}:{API:string; beans:any[]; onSaved
                 時間差（実測秒−推奨秒） vs {yAccessor.label}
                 <span className="ml-2 text-xs text-gray-500">r={rTimeBean ?? '—'}</span>
               </div>
-              <div className="h-44">
-                <ResponsiveContainer>
-                  <ScatterChart>
-                    <CartesianGrid />
-                    <XAxis dataKey="_deltas.time_delta" name="timeΔ(s)" />
-                    <YAxis dataKey={yAccessor.key} name={yAccessor.label} />
-                    <Tooltip />
-                    <Scatter name="drips" data={beanDrips} />
-                  </ScatterChart>
-                </ResponsiveContainer>
-              </div>
+              
+              <ChartFrame aspect={4/3}>
+  <ScatterChart margin={{ top: 8, right: 16, bottom: 8, left: 0 }}>
+    <CartesianGrid />
+    <XAxis dataKey="_deltas.time_delta" name="timeΔ(s)" tick={{ fontSize: 12 }} />
+    <YAxis dataKey={yAccessor.key} name={yAccessor.label} tick={{ fontSize: 12 }} />
+    <Tooltip />
+    <Scatter name="drips" data={beanDrips} />
+  </ScatterChart>
+</ChartFrame>
+              
             </div>
           )}
         </div>
@@ -1342,25 +1342,23 @@ export function DripForm({API, beans, onSaved}:{API:string; beans:any[]; onSaved
           })()}
         </div>
 
-        <div className="h-44">
-          <ResponsiveContainer>
-            <RadarChart data={[
-              {subject:'クリーンさ', value: Number(form.ratings?.clean)||0},
-              {subject:'風味',     value: Number(form.ratings?.flavor)||0},
-              {subject:'酸味',     value: Number(form.ratings?.acidity)||0},
-              {subject:'苦味',     value: Number(form.ratings?.bitterness)||0},
-              {subject:'甘味',     value: Number(form.ratings?.sweetness)||0},
-              {subject:'コク',     value: Number(form.ratings?.body)||0},
-              {subject:'後味',     value: Number(form.ratings?.aftertaste)||0},
-            ]}>
-              <PolarGrid />
-              <PolarAngleAxis dataKey="subject" />
-              <PolarRadiusAxis angle={30} domain={[0,10]} />
-              <Radar name="now" dataKey="value" fillOpacity={0.3} />
-              <Tooltip />
-            </RadarChart>
-          </ResponsiveContainer>
-        </div>
+        <ChartFrame aspect={1}>
+  <RadarChart data={[
+    {subject:'クリーンさ', value: Number(form.ratings?.clean)||0},
+    {subject:'風味',       value: Number(form.ratings?.flavor)||0},
+    {subject:'酸味',       value: Number(form.ratings?.acidity)||0},
+    {subject:'苦味',       value: Number(form.ratings?.bitterness)||0},
+    {subject:'甘味',       value: Number(form.ratings?.sweetness)||0},
+    {subject:'コク',       value: Number(form.ratings?.body)||0},
+    {subject:'後味',       value: Number(form.ratings?.aftertaste)||0},
+  ]}>
+    <PolarGrid />
+    <PolarAngleAxis dataKey="subject" />
+    <PolarRadiusAxis angle={30} domain={[0,10]} />
+    <Radar name="now" dataKey="value" fillOpacity={0.3} />
+    <Tooltip />
+  </RadarChart>
+</ChartFrame>
 
         <div className="grid sm:grid-cols-3 gap-2 text-xs">
           <div className="border rounded p-2">
