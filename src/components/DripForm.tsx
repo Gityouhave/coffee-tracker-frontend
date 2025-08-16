@@ -58,28 +58,7 @@ const fmtAgingDays = (bean:any, brew_date?:string)=>{
   return (dd==null)?'—':`${dd}日目`;
 };
 
-const fmtBeanHeader = (bean:any, brew_date?:string)=>{
-  const origins = (bean?.origin? splitOrigins(String(bean.origin)) : []);
-  const originsTxt = origins.length? flagifyOriginList(origins).join('・') : '—';
-  const roast = bean?.roast_level ?? '—';
-  const aging = fmtAgingDays(bean, brew_date);
-  const name = bean?.name ?? '—';
-  return `${name}（${originsTxt}｜${roast}｜${aging}）`;
-};
 
-const fmtConditionTail = (d:any)=>{
-  const g20 = grind20(d);
-  const g6  = grindGroup6(g20);
-  const grindTxt = Number.isFinite(d?.grind) ? `挽き${d.grind}${g6?`（${g6}）`:''}` : '挽き—';
-  const tempTxt  = Number.isFinite(d?.water_temp_c)
-    ? `湯温${d.water_temp_c}℃（${fmtDeltaTemp(d)}）` : '湯温—';
-  const doseTxt  = Number.isFinite(d?.dose_g) ? `豆${d.dose_g}g` : '豆—';
-  const waterTxt = Number.isFinite(d?.water_g) ? `湯量${d.water_g}g` : '湯量—';
-  const timeTxt  = Number.isFinite(d?.time_sec)
-    ? `時間${secToMMSS(d.time_sec)}（${fmtDeltaTime(d)}）` : '時間—';
-  const drip     = d?.dripper ?? '—';
-  return `／${drip}：${grindTxt}・${tempTxt}・${doseTxt}・${waterTxt}・${timeTxt}`;
-};
 // === END: pattern label helpers ===
 const RADAR_COLORS = {
   beanAvg:        { stroke: '#111827', fill: '#11182733' }, // 黒（平均）
@@ -103,14 +82,6 @@ const RATING_KEYS = [
 type RatingKey = typeof RATING_KEYS[number];
 type TasteKey = typeof TASTE_KEYS[number]['key'];
 type ScopeKey = 'thisBean'|'sameRoast'|'originNear';
-
-const COUNTRY_FLAGS: Record<string,string> = {
-  'コロンビア':'🇨🇴','ブラジル':'🇧🇷','エチオピア':'🇪🇹','ケニア':'🇰🇪','グアテマラ':'🇬🇹',
-  'コスタリカ':'🇨🇷','ホンジュラス':'🇭🇳','エルサルバドル':'🇸🇻','ニカラグア':'🇳🇮','パナマ':'🇵🇦',
-  'ペルー':'🇵🇪','ボリビア':'🇧🇴','メキシコ':'🇲🇽','ルワンダ':'🇷🇼','ブルンジ':'🇧🇮','タンザニア':'🇹🇿',
-  'インドネシア':'🇮🇩','東ティモール':'🇹🇱','イエメン':'🇾🇪','中国':'🇨🇳','日本':'🇯🇵',
-};
-const withFlag = (country:string)=> (COUNTRY_FLAGS[country]||'') + country;
 
 /** 60秒未満は "xx秒"、それ以上は "m:ss" で返す */
 const formatSecFriendly = (s?:number)=>{
@@ -136,6 +107,30 @@ const deltaTime = (actualSec?:number|null, recSec?:number|null) => {
 };
 // === END: radar & flags helpers ===
 
+// 統一フォーマットのラベル（豆名（旗｜焙煎｜エイジング）／ドリッパー：挽き…・湯温…（Δ）・…）
+const mkLabelSub = (d:any, bean:any)=>{
+  const origins = bean?.origin ? splitOrigins(String(bean.origin)) : [];
+  const countryFlags = origins.length ? flagifyOriginList(origins).join('・') : '—';
+  const age = fmtAgingDays(bean, d?.brew_date);
+  const { recTemp, recTime } = recommendForDrip({
+    roast_level: d?.roast_level, derive: d?.derive, label20: d?.label20,
+  });
+
+  const g20 = grind20(d);
+  const g6  = grindGroup6(g20);
+
+  const head = `${bean?.name||'—'}（${countryFlags}｜${bean?.roast_level||'—'}｜${age}） ／ ${d?.dripper||'—'}：`;
+  const body = [
+    Number.isFinite(d?.grind)        ? `挽き${d.grind}${g6?`（${g6}）`:''}` : null,
+    Number.isFinite(d?.water_temp_c) ? `湯温${d.water_temp_c}℃${deltaTemp(d?.water_temp_c, recTemp ?? null)}` : null,
+    Number.isFinite(d?.dose_g)       ? `豆${d.dose_g}g` : null,
+    Number.isFinite(d?.water_g)      ? `湯量${d.water_g}g` : null,
+    Number.isFinite(d?.time_sec)     ? `時間${secToMMSS(d.time_sec)}${deltaTime(d?.time_sec, recTime ?? null)}` : null,
+  ].filter(Boolean).join('・');
+
+  return `${head}${body}`;
+};
+
 /** 焙煎度→推奨湯温（℃） */
 const ROAST_TEMP: Record<string, number> = {
   'ライト': 92.5, 'シナモン': 90.0, 'ミディアム': 87.5, 'ハイ': 85.0,
@@ -157,16 +152,6 @@ const toGrindGroup = (label20?: string|null) => {
   if (label20.startsWith('細')) return '細'
   if (label20 === '極細') return '極細'
   return null
-}
-
-/** mm:ss → 秒 */
-const toSec = (mmss?: string|null) => {
-  if (!mmss) return null
-  const m = mmss.split(':')
-  if (m.length !== 2) return null
-  const min = Number(m[0]), sec = Number(m[1])
-  if (isNaN(min) || isNaN(sec)) return null
-  return min*60 + sec
 }
 
 /** 秒 → mm:ss */
@@ -261,61 +246,55 @@ const [beanAvgRatings, setBeanAvgRatings] =
   const [bestPatterns, setBestPatterns] = useState<BestPattern[]>([])
   const [selectedPatternId, setSelectedPatternId] = useState<BestPattern['id']|''>('')
 
-// 前回値適用（条件＋味評価8項目）
+// 前回値適用（条件＋味評価：トグル有り）
 const applyLast = () => {
   if (!last) return;
-  setForm((s:any)=> ({
-    ...s,
-    grind:        last.grind        ?? s.grind,
-    water_temp_c: last.water_temp_c ?? s.water_temp_c,
-    dose_g:       last.dose_g       ?? s.dose_g,
-    water_g:      last.water_g      ?? s.water_g,
-    drawdown_g:   (last.drawdown_g ?? s.drawdown_g),
-    time:         (last.time_sec!=null ? secToMMSS(last.time_sec) : s.time),
-    dripper:      last.dripper ?? s.dripper,
-    storage:      last.storage ?? s.storage,
-    ratings: {
-      ...s.ratings,
-      clean:      last?.ratings?.clean      ?? s.ratings?.clean ?? '',
-      flavor:     last?.ratings?.flavor     ?? s.ratings?.flavor ?? '',
-      acidity:    last?.ratings?.acidity    ?? s.ratings?.acidity ?? '',
-      bitterness: last?.ratings?.bitterness ?? s.ratings?.bitterness ?? '',
-      sweetness:  last?.ratings?.sweetness  ?? s.ratings?.sweetness ?? '',
-      body:       last?.ratings?.body       ?? s.ratings?.body ?? '',
-      aftertaste: last?.ratings?.aftertaste ?? s.ratings?.aftertaste ?? '',
-      overall:    last?.ratings?.overall    ?? s.ratings?.overall ?? '',
+  setForm((s:any)=> {
+    const next:any = {
+      ...s,
+      grind:        last.grind        ?? s.grind,
+      water_temp_c: last.water_temp_c ?? s.water_temp_c,
+      dose_g:       last.dose_g       ?? s.dose_g,
+      water_g:      last.water_g      ?? s.water_g,
+      drawdown_g:   (last.drawdown_g ?? s.drawdown_g),
+      time:         (last.time_sec!=null ? secToMMSS(last.time_sec) : s.time),
+      dripper:      last.dripper ?? s.dripper,
+      storage:      last.storage ?? s.storage,
+      ratings:      { ...(s.ratings||{}) },
+    };
+    const src = last.ratings || {};
+    for (const k of RATING_KEYS) {
+      if (applyRatingKeys[k] && src[k]!=null && src[k]!=='') next.ratings[k] = String(src[k]);
     }
-  }))
+    return next;
+  });
 };
 
-// 暫定最適値適用（ドロップダウン選択の1件／条件＋味評価）
+// 暫定最適値適用（条件＋味評価：トグル有り）
 const applyBest = () => {
   const pat = bestPatterns.find(p => p.id === selectedPatternId) || bestPatterns[0];
   if (!pat) return;
-  // pat.fields は条件だけなので、対応する元Dripを探して ratings も吸う
   const src = (pat.id==='sameRoast' ? bestSameRoast : bestOriginNear);
-  setForm((s:any)=> ({
-    ...s,
-    grind:        pat.fields.grind        ?? s.grind,
-    water_temp_c: pat.fields.water_temp_c ?? s.water_temp_c,
-    dose_g:       pat.fields.dose_g       ?? s.dose_g,
-    water_g:      pat.fields.water_g      ?? s.water_g,
-    drawdown_g:   (pat.fields.drawdown_g ?? s.drawdown_g),
-    time:         (pat.fields.time ?? s.time),
-    dripper:      pat.fields.dripper ?? s.dripper,
-    storage:      pat.fields.storage ?? s.storage,
-    ratings: src?.ratings ? {
-      ...s.ratings,
-      clean:      src.ratings.clean,
-      flavor:     src.ratings.flavor,
-      acidity:    src.ratings.acidity,
-      bitterness: src.ratings.bitterness,
-      sweetness:  src.ratings.sweetness,
-      body:       src.ratings.body,
-      aftertaste: src.ratings.aftertaste,
-      overall:    src.ratings.overall,
-    } : s.ratings
-  }))
+
+  setForm((s:any)=> {
+    const next:any = {
+      ...s,
+      grind:        pat.fields.grind        ?? s.grind,
+      water_temp_c: pat.fields.water_temp_c ?? s.water_temp_c,
+      dose_g:       pat.fields.dose_g       ?? s.dose_g,
+      water_g:      pat.fields.water_g      ?? s.water_g,
+      drawdown_g:   (pat.fields.drawdown_g ?? s.drawdown_g),
+      time:         (pat.fields.time ?? s.time),
+      dripper:      pat.fields.dripper ?? s.dripper,
+      storage:      pat.fields.storage ?? s.storage,
+      ratings:      { ...(s.ratings||{}) },
+    };
+    const srcR = src?.ratings || {};
+    for (const k of RATING_KEYS) {
+      if (applyRatingKeys[k] && srcR[k]!=null && srcR[k]!=='') next.ratings[k] = String(srcR[k]);
+    }
+    return next;
+  });
 };
  // BEGIN: applyFromDrip
 const applyFromDrip = (d:any) => {
@@ -760,8 +739,7 @@ const RatingSelect = ({
           {last && (
             <>
               <span className="text-gray-600">
-                前回（{last.brew_date} / {last.dripper ?? '—'}）：挽き{last.grind ?? '—'}・湯温{last.water_temp_c ?? '—'}℃
-                ・豆{last.dose_g ?? '—'}g・湯量{last.water_g ?? '—'}g・時間{last.time_sec!=null ? `${Math.floor(last.time_sec/60)}:${String(last.time_sec%60).padStart(2,'0')}` : '—'}
+                前回：{mkLabelSub(last, selBean)}
               </span>
               <button type="button" onClick={applyLast} className="px-2 py-1 rounded border bg-white hover:bg-gray-50">
                 前回値を適用
