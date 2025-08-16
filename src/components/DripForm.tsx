@@ -10,6 +10,10 @@ import { flagify, flagifyOriginList, splitOrigins } from '../utils/flags'
 import { filterSortBeans, beanOptionLabel, ROASTS } from '../utils/beanFilters'
 import { ORIGINS } from '../constants/origins'
 import { ORIGIN_THEORIES } from '../constants/originTheories'
+const scopeTitle = (s: ScopeKey) =>
+  s === 'thisBean' ? '同豆ベスト'
+  : s === 'sameRoast' ? '同焙煎度ベスト'
+  : '産地×近焙煎度ベスト';
 
 // === BEGIN: pattern label helpers ===
 const grind20 = (d:any)=> d?.derive?.grind?.label20 || d?.label20 || '';
@@ -822,20 +826,8 @@ export function DripForm({API, beans, onSaved}:{API:string; beans:any[]; onSaved
 
         {hasAvg && (<div className="text-sm">平均評価（★）：<StarRow avg={beanStats?.avg_overall} /></div>)}
 
-      
-
-            {/* レーダー用データ作成 */}
-            {(() => {
-              const th = bestByScopeMetric?.// 追加：スコープの見出し（カードタイトル）を返す小ヘルパ
-const scopeTitle = (s: ScopeKey) =>
-  s === 'thisBean' ? '同豆ベスト'
-  : s === 'sameRoast' ? '同焙煎度ベスト'
-  : '産地×近焙煎度ベスト';
-
-// ここから差し替え（元の「// レーダー …」ブロックを削除してこれを入れる）
-{hasRadar && showSection.radar && (
+      {hasRadar && showSection.radar && (
   <div className="space-y-2">
-    {/* 基準メトリクスの切替（3カード共通） */}
     <div className="flex flex-wrap items-center gap-2 text-xs">
       <span>暫定最適値の基準：</span>
       <select
@@ -847,140 +839,72 @@ const scopeTitle = (s: ScopeKey) =>
       </select>
     </div>
 
-    {/* 3枚の別カード：同豆 / 同焙煎度 / 産地×近焙煎度 */}
     <div className="grid gap-3 md:grid-cols-3">
-      {(['thisBean','sameRoast','originNear'] as ScopeKey[]).map(scope => {
-        const d = bestByScopeMetric?.[scope]?.[bestMetric];
-        const title = scopeTitle(scope);
+      {(['thisBean','sameRoast','originNear'] as ScopeKey[])
+        .map(scope => {
+          const d = bestByScopeMetric?.[scope]?.[bestMetric];
+          const title = scopeTitle(scope);
+          if (!d) {
+            return (
+              <div key={scope} className="border rounded p-3 bg-white text-xs text-gray-500">
+                {title}（{metricJp(bestMetric)}）：データなし
+              </div>
+            );
+          }
+          const bean = beans.find(b=> String(b.id)===String(d.bean_id));
+          const radarData = [
+            {subject:'クリーンさ',  value:Number(d?.ratings?.clean)||0},
+            {subject:'風味',        value:Number(d?.ratings?.flavor)||0},
+            {subject:'酸味',        value:Number(d?.ratings?.acidity)||0},
+            {subject:'苦味',        value:Number(d?.ratings?.bitterness)||0},
+            {subject:'甘味',        value:Number(d?.ratings?.sweetness)||0},
+            {subject:'コク',        value:Number(d?.ratings?.body)||0},
+            {subject:'後味',        value:Number(d?.ratings?.aftertaste)||0},
+          ];
+          const color =
+            scope === 'thisBean' ? RADAR_COLORS.thisBeanBest
+            : scope === 'sameRoast' ? RADAR_COLORS.sameRoastBest
+            : RADAR_COLORS.originNearBest;
 
-        if (!d) {
           return (
-            <div key={scope} className="border rounded p-3 bg-white text-xs text-gray-500">
-              {title}（{metricJp(bestMetric)}）：データなし
+            <div key={scope} className="border rounded bg-white p-3 flex flex-col gap-2">
+              <div className="flex items-center justify-between">
+                <div className="text-sm font-semibold">
+                  {title}（{metricJp(bestMetric)}）
+                </div>
+                <button
+                  type="button"
+                  onClick={()=> applyFromDrip(d)}
+                  className="px-2 py-1 rounded border bg-white hover:bg-gray-50 text-xs"
+                >
+                  この値を適用
+                </button>
+              </div>
+
+              <div className="h-56">
+                <ResponsiveContainer>
+                  <RadarChart data={radarData}>
+                    <PolarGrid />
+                    <PolarAngleAxis dataKey="subject" />
+                    <PolarRadiusAxis angle={30} domain={[0,10]} />
+                    <Radar name={title} dataKey="value"
+                      stroke={color.stroke} fill={color.fill} fillOpacity={0.35} />
+                    <Tooltip />
+                  </RadarChart>
+                </ResponsiveContainer>
+              </div>
+
+              <div className="text-xs whitespace-pre-wrap leading-5">
+                {makeMultilineLabel(d, bean, title, bestMetric)}
+              </div>
             </div>
           );
-        }
-
-        const bean = beans.find(b=> String(b.id)===String(d.bean_id));
-        const radarData = [
-          {subject:'クリーンさ',  value:Number(d?.ratings?.clean)||0},
-          {subject:'風味',        value:Number(d?.ratings?.flavor)||0},
-          {subject:'酸味',        value:Number(d?.ratings?.acidity)||0},
-          {subject:'苦味',        value:Number(d?.ratings?.bitterness)||0},
-          {subject:'甘味',        value:Number(d?.ratings?.sweetness)||0},
-          {subject:'コク',        value:Number(d?.ratings?.body)||0},
-          {subject:'後味',        value:Number(d?.ratings?.aftertaste)||0},
-        ];
-
-        const color =
-          scope === 'thisBean' ? RADAR_COLORS.thisBeanBest
-          : scope === 'sameRoast' ? RADAR_COLORS.sameRoastBest
-          : RADAR_COLORS.originNearBest;
-
-        return (
-          <div key={scope} className="border rounded bg-white p-3 flex flex-col gap-2">
-            {/* ヘッダ：タイトル＋適用ボタン */}
-            <div className="flex items-center justify-between">
-              <div className="text-sm font-semibold">
-                {title}（{metricJp(bestMetric)}）
-              </div>
-              <button
-                type="button"
-                onClick={()=> applyFromDrip(d)}
-                className="px-2 py-1 rounded border bg-white hover:bg-gray-50 text-xs"
-                title="このレーダーの条件・評価をフォームへ反映"
-              >
-                この値を適用
-              </button>
-            </div>
-
-            {/* レーダーチャート（単独） */}
-            <div className="h-56">
-              <ResponsiveContainer>
-                <RadarChart data={radarData}>
-                  <PolarGrid />
-                  <PolarAngleAxis dataKey="subject" />
-                  <PolarRadiusAxis angle={30} domain={[0,10]} />
-                  <Radar
-                    name={title}
-                    dataKey="value"
-                    stroke={color.stroke}
-                    fill={color.fill}
-                    fillOpacity={0.35}
-                  />
-                  <Tooltip />
-                </RadarChart>
-              </ResponsiveContainer>
-            </div>
-
-            {/* 詳細ラベル（例の3行表記） */}
-            <div className="text-xs whitespace-pre-wrap leading-5">
-              {makeMultilineLabel(d, bean, title, bestMetric)}
-            </div>
-          </div>
-        );
       })}
     </div>
   </div>
 )}
-thisBean?.[bestMetric];
-              const sr = bestByScopeMetric?.sameRoast?.[bestMetric];
-              const on = bestByScopeMetric?.originNear?.[bestMetric];
-              const val = (d:any,k: TasteKey)=> Number(d?.ratings?.[k])||0;
-              const data = [
-                {subject:'クリーンさ',  beanAvg:Number(beanAvgRatings.clean)||0, thisBean:val(th,'clean'),  sameRoast:val(sr,'clean'),  originNear:val(on,'clean')},
-                {subject:'風味',        beanAvg:Number(beanAvgRatings.flavor)||0,thisBean:val(th,'flavor'), sameRoast:val(sr,'flavor'), originNear:val(on,'flavor')},
-                {subject:'酸味',        beanAvg:Number(beanAvgRatings.acidity)||0,thisBean:val(th,'acidity'),sameRoast:val(sr,'acidity'),originNear:val(on,'acidity')},
-                {subject:'苦味',        beanAvg:Number(beanAvgRatings.bitterness)||0,thisBean:val(th,'bitterness'),sameRoast:val(sr,'bitterness'),originNear:val(on,'bitterness')},
-                {subject:'甘味',        beanAvg:Number(beanAvgRatings.sweetness)||0,thisBean:val(th,'sweetness'),sameRoast:val(sr,'sweetness'),originNear:val(on,'sweetness')},
-                {subject:'コク',        beanAvg:Number(beanAvgRatings.body)||0,  thisBean:val(th,'body'),   sameRoast:val(sr,'body'),   originNear:val(on,'body')},
-                {subject:'後味',        beanAvg:Number(beanAvgRatings.aftertaste)||0,thisBean:val(th,'aftertaste'),sameRoast:val(sr,'aftertaste'),originNear:val(on,'aftertaste')},
-              ];
 
-              return (
-                <div className="h-56">
-                  <ResponsiveContainer>
-                    <RadarChart data={data}>
-                      <PolarGrid />
-                      <PolarAngleAxis dataKey="subject" />
-                      <PolarRadiusAxis angle={30} domain={[0, 10]} />
 
-                      {/* 平均（黒） */}
-                      <Radar name="この豆の平均" dataKey="beanAvg"
-                            stroke={RADAR_COLORS.beanAvg.stroke}
-                            fill={RADAR_COLORS.beanAvg.fill}
-                            fillOpacity={1} />
-
-                      {/* ベスト（緑／赤／青） */}
-                      {visibleScopes.thisBean && (
-                        <Radar name={`その豆ベスト（${TASTE_KEYS.find(t=>t.key===bestMetric)?.label}）`}
-                              dataKey="thisBean"
-                              stroke={RADAR_COLORS.thisBeanBest.stroke}
-                              fill={RADAR_COLORS.thisBeanBest.fill}
-                              fillOpacity={0.35} />
-                      )}
-                      {visibleScopes.sameRoast && (
-                        <Radar name={`同焙煎度ベスト（${TASTE_KEYS.find(t=>t.key===bestMetric)?.label}）`}
-                              dataKey="sameRoast"
-                              stroke={RADAR_COLORS.sameRoastBest.stroke}
-                              fill={RADAR_COLORS.sameRoastBest.fill}
-                              fillOpacity={0.35} />
-                      )}
-                      {visibleScopes.originNear && (
-                        <Radar name={`産地×近焙煎度ベスト（${TASTE_KEYS.find(t=>t.key===bestMetric)?.label}）`}
-                              dataKey="originNear"
-                              stroke={RADAR_COLORS.originNearBest.stroke}
-                              fill={RADAR_COLORS.originNearBest.fill}
-                              fillOpacity={0.35} />
-                      )}
-
-                      <Legend />
-                      <Tooltip />
-                    </RadarChart>
-                  </ResponsiveContainer>
-                </div>
-              )
-            })()}
           </div>
         )}
 
