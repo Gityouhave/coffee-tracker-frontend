@@ -822,36 +822,107 @@ export function DripForm({API, beans, onSaved}:{API:string; beans:any[]; onSaved
 
         {hasAvg && (<div className="text-sm">平均評価（★）：<StarRow avg={beanStats?.avg_overall} /></div>)}
 
-        {/* レーダー */}
-        {hasRadar && showSection.radar && ( 
-          <div className="space-y-2">
-            {/* 表示切替UI */}
-            <div className="flex flex-wrap items-center gap-2 text-xs">
-              <span>暫定最適値の基準：</span>
-              <select className="border rounded p-1"
-                      value={bestMetric}
-                      onChange={e=>setBestMetric(e.target.value as TasteKey)}>
-                {TASTE_KEYS.map(t=> <option key={t.key} value={t.key}>{t.label}</option>)}
-              </select>
-
-              <span className="ml-2">表示：</span>
-              {([
-                {k:'thisBean',    label:'その豆ベスト'},
-                {k:'sameRoast',   label:'同焙煎度ベスト'},
-                {k:'originNear',  label:'産地×近焙煎度ベスト'},
-              ] as {k:ScopeKey,label:string}[]).map(s=>(
-                <label key={s.k} className="inline-flex items-center gap-1">
-                  <input type="checkbox"
-                        checked={visibleScopes[s.k]}
-                        onChange={e=>setVisibleScopes(v=>({...v,[s.k]:e.target.checked}))}/>
-                  <span>{s.label}</span>
-                </label>
-              ))}
-            </div>
+      
 
             {/* レーダー用データ作成 */}
             {(() => {
-              const th = bestByScopeMetric?.thisBean?.[bestMetric];
+              const th = bestByScopeMetric?.// 追加：スコープの見出し（カードタイトル）を返す小ヘルパ
+const scopeTitle = (s: ScopeKey) =>
+  s === 'thisBean' ? '同豆ベスト'
+  : s === 'sameRoast' ? '同焙煎度ベスト'
+  : '産地×近焙煎度ベスト';
+
+// ここから差し替え（元の「// レーダー …」ブロックを削除してこれを入れる）
+{hasRadar && showSection.radar && (
+  <div className="space-y-2">
+    {/* 基準メトリクスの切替（3カード共通） */}
+    <div className="flex flex-wrap items-center gap-2 text-xs">
+      <span>暫定最適値の基準：</span>
+      <select
+        className="border rounded p-1"
+        value={bestMetric}
+        onChange={(e)=>setBestMetric(e.target.value as TasteKey)}
+      >
+        {TASTE_KEYS.map(t=> <option key={t.key} value={t.key}>{t.label}</option>)}
+      </select>
+    </div>
+
+    {/* 3枚の別カード：同豆 / 同焙煎度 / 産地×近焙煎度 */}
+    <div className="grid gap-3 md:grid-cols-3">
+      {(['thisBean','sameRoast','originNear'] as ScopeKey[]).map(scope => {
+        const d = bestByScopeMetric?.[scope]?.[bestMetric];
+        const title = scopeTitle(scope);
+        if (!d) {
+          return (
+            <div key={scope} className="border rounded p-3 bg-white text-xs text-gray-500">
+              {title}（{metricJp(bestMetric)}）：データなし
+            </div>
+          );
+        }
+
+        const bean = beans.find(b=> String(b.id)===String(d.bean_id));
+        const radarData = [
+          {subject:'クリーンさ',  value:Number(d?.ratings?.clean)||0},
+          {subject:'風味',        value:Number(d?.ratings?.flavor)||0},
+          {subject:'酸味',        value:Number(d?.ratings?.acidity)||0},
+          {subject:'苦味',        value:Number(d?.ratings?.bitterness)||0},
+          {subject:'甘味',        value:Number(d?.ratings?.sweetness)||0},
+          {subject:'コク',        value:Number(d?.ratings?.body)||0},
+          {subject:'後味',        value:Number(d?.ratings?.aftertaste)||0},
+        ];
+
+        // スコープ別の色を選択
+        const color =
+          scope === 'thisBean' ? RADAR_COLORS.thisBeanBest
+          : scope === 'sameRoast' ? RADAR_COLORS.sameRoastBest
+          : RADAR_COLORS.originNearBest;
+
+        return (
+          <div key={scope} className="border rounded bg-white p-3 flex flex-col gap-2">
+            {/* ヘッダ：タイトル＋適用ボタン */}
+            <div className="flex items-center justify-between">
+              <div className="text-sm font-semibold">
+                {title}（{metricJp(bestMetric)}）
+              </div>
+              <button
+                type="button"
+                onClick={()=> applyFromDrip(d)}
+                className="px-2 py-1 rounded border bg-white hover:bg-gray-50 text-xs"
+                title="このレーダーの条件・評価をフォームへ反映"
+              >
+                この値を適用
+              </button>
+            </div>
+
+            {/* レーダーチャート（単独表示） */}
+            <div className="h-56">
+              <ResponsiveContainer>
+                <RadarChart data={radarData}>
+                  <PolarGrid />
+                  <PolarAngleAxis dataKey="subject" />
+                  <PolarRadiusAxis angle={30} domain={[0,10]} />
+                  <Radar
+                    name={title}
+                    dataKey="value"
+                    stroke={color.stroke}
+                    fill={color.fill}
+                    fillOpacity={0.35}
+                  />
+                  <Tooltip />
+                </RadarChart>
+              </ResponsiveContainer>
+            </div>
+
+            {/* 右側に欲しいフォーマットの詳細（改行テキスト） */}
+            <div className="text-xs whitespace-pre-wrap leading-5">
+              {makeMultilineLabel(d, bean, title, bestMetric)}
+            </div>
+          </div>
+        );
+      })}
+    </div>
+  </div>
+)}thisBean?.[bestMetric];
               const sr = bestByScopeMetric?.sameRoast?.[bestMetric];
               const on = bestByScopeMetric?.originNear?.[bestMetric];
               const val = (d:any,k: TasteKey)=> Number(d?.ratings?.[k])||0;
