@@ -23,12 +23,16 @@ const ChartFrame: React.FC<React.PropsWithChildren<{ aspect?: number; className?
     </div>
   );
 };
-type ScopeKey = 'thisBean'|'sameRoast'|'originNear';
+ type ScopeKey = 'thisBean'|'sameRoast'|'originNear';
 
-const scopeTitle = (s: ScopeKey) =>
-  s === 'thisBean' ? '同豆ベスト'
-  : s === 'sameRoast' ? '同焙煎度ベスト'
-  : '産地×近焙煎度ベスト';
+ const scopeTitle = (s: ScopeKey) =>
+   s === 'thisBean' ? '同豆ベスト'
+   : s === 'sameRoast' ? '同焙煎度ベスト'
+   : '産地×近焙煎度ベスト';
+const scopeTitleWorst = (s: ScopeKey) =>
+  s === 'thisBean' ? '同豆ワースト'
+  : s === 'sameRoast' ? '同焙煎度ワースト'
+  : '産地×近焙煎度ワースト';
 
 // === BEGIN: pattern label helpers ===
 const grind20 = (d:any)=> d?.derive?.grind?.label20 || d?.label20 || '';
@@ -323,8 +327,10 @@ export function DripForm({API, beans, onSaved}:{API:string; beans:any[]; onSaved
   const [visibleScopes, setVisibleScopes] = useState<Record<ScopeKey, boolean>>({
     thisBean: true, sameRoast: true, originNear: true
   });
-  const [bestByScopeMetric, setBestByScopeMetric] =
-    useState<Record<ScopeKey, Partial<Record<TasteKey, any>>>>({ thisBean:{}, sameRoast:{}, originNear:{} });
+const [bestByScopeMetric, setBestByScopeMetric] =
+  useState<Record<ScopeKey, Partial<Record<TasteKey, any>>>>({ thisBean:{}, sameRoast:{}, originNear:{} });
+const [worstByScopeMetric, setWorstByScopeMetric] =
+  useState<Record<ScopeKey, Partial<Record<TasteKey, any>>>>({ thisBean:{}, sameRoast:{}, originNear:{} });
   const [beanAvgRatings, setBeanAvgRatings] =
     useState<Record<string, number>>({});
   // END: new states
@@ -344,15 +350,17 @@ export function DripForm({API, beans, onSaved}:{API:string; beans:any[]; onSaved
 
   // 追加: レーダー内の個別カード表示切替（同豆/同焙煎/近焙煎/平均/前回）
 type RadarItemKey = 'thisBean'|'sameRoast'|'originNear'|'average'|'previous';
-const [showCharts, setShowCharts] = useState<Record<RadarItemKey, boolean>>({
-  thisBean: true,  // ←既定で3つは表示
-  sameRoast: true,
-  originNear: true,
-  average: false,  // ←平均はデフォルトOFF
-  previous: false, // ←前回もデフォルトOFF
+type RadarItemKeyExt =
+  | 'thisBean'|'sameRoast'|'originNear'
+  | 'thisBeanWorst'|'sameRoastWorst'|'originNearWorst'
+  | 'average'|'previous';
+const [showCharts, setShowCharts] = useState<Record<RadarItemKeyExt, boolean>>({
+  thisBean: true, sameRoast: true, originNear: true,
+  thisBeanWorst: true, sameRoastWorst: true, originNearWorst: true,  // ← 追加
+  average: false, previous: false,
 });
-const toggleChart = (k: RadarItemKey) =>
-  setShowCharts(s => ({ ...s, [k]: !s[k] }));
+  
+const toggleChart = (k: RadarItemKeyExt) => setShowCharts(s => ({ ...s, [k]: !s[k] }));
   // セレクト＆適用ボタン用
   type BestPattern = {
     id: 'thisBean'|'sameRoast'|'originNear'
@@ -555,16 +563,28 @@ const toggleChart = (k: RadarItemKey) =>
           .filter(d => Number.isFinite(Number(d?.ratings?.[metric])))
           .sort((a,b)=> Number(b.ratings[metric]) - Number(a.ratings[metric])
                       || (new Date(b.brew_date).getTime() - new Date(a.brew_date).getTime()))[0] || null;
-
+       // 3スコープ × 8指標ワースト（※スコア昇順。日付は新しい方を優先）
+  const worstOf = (arr:any[], metric:TasteKey) =>
+    arr
+      .filter(d => Number.isFinite(Number(d?.ratings?.[metric])))
+      .sort((a,b)=> Number(a.ratings[metric]) - Number(b.ratings[metric])
+                  || (new Date(b.brew_date).getTime() - new Date(a.brew_date).getTime()))[0] || null;
       const bestMap: Record<ScopeKey, Partial<Record<TasteKey, any>>> = {
         thisBean: {}, sameRoast: {}, originNear: {}
       };
+       const worstMap: Record<ScopeKey, Partial<Record<TasteKey, any>>> = {
+    thisBean: {}, sameRoast: {}, originNear: {}
+  };
       for (const t of (['overall','clean','flavor','acidity','bitterness','sweetness','body','aftertaste'] as TasteKey[])) {
         bestMap.thisBean[t]   = bestOf(mine, t);
         bestMap.sameRoast[t]  = bestOf(sameRoastCandidates, t);
         bestMap.originNear[t] = bestOf(originNearCandidates, t);
+        worstMap.thisBean[t]   = worstOf(mine, t);
+    worstMap.sameRoast[t]  = worstOf(sameRoastCandidates, t);
+    worstMap.originNear[t] = worstOf(originNearCandidates, t);
       }
       setBestByScopeMetric(bestMap);
+      setWorstByScopeMetric(worstMap);
       setBeanAvgRatings(beanAvgMap);
 
       // 暫定最適“選択肢”
@@ -853,6 +873,19 @@ const toggleChart = (k: RadarItemKey) =>
       <input type="checkbox" checked={showCharts.originNear} onChange={()=>toggleChart('originNear')} />
       産地×近焙煎
     </label>
+        <span className="mx-1 text-gray-400">/</span>
+    <label className="inline-flex items-center gap-1">
+      <input type="checkbox" checked={showCharts.thisBeanWorst} onChange={()=>toggleChart('thisBeanWorst')} />
+      同豆ワースト
+    </label>
+    <label className="inline-flex items-center gap-1">
+      <input type="checkbox" checked={showCharts.sameRoastWorst} onChange={()=>toggleChart('sameRoastWorst')} />
+      同焙煎ワースト
+    </label>
+    <label className="inline-flex items-center gap-1">
+      <input type="checkbox" checked={showCharts.originNearWorst} onChange={()=>toggleChart('originNearWorst')} />
+      産地×近焙煎ワースト
+    </label>
     <label className="inline-flex items-center gap-1">
       <input type="checkbox" checked={showCharts.average} onChange={()=>toggleChart('average')} />
       平均
@@ -913,7 +946,7 @@ const toggleChart = (k: RadarItemKey) =>
       </select>
     </div>
 
-    {/* コンパクトなカードグリッド（余白を詰める） */}
+    {/* コンパクトなカードグリッド（ベスト3 + ワースト3） */}
     <div className="grid gap-2 [grid-template-columns:repeat(auto-fit,minmax(220px,1fr))]">
       {/* 同豆・同焙煎・近焙煎 */}
       {(['thisBean','sameRoast','originNear'] as const).map(scope => {
@@ -969,7 +1002,60 @@ const toggleChart = (k: RadarItemKey) =>
           </div>
         );
       })}
-
+{/* ワースト3種 */}
+    {(['thisBean','sameRoast','originNear'] as const).map(scope => {
+      const key = (scope+'Worst') as 'thisBeanWorst'|'sameRoastWorst'|'originNearWorst';
+      if (!showCharts[key]) return null;
+      const d = worstByScopeMetric?.[scope]?.[bestMetric];
+      const title = scopeTitleWorst(scope as ScopeKey);
+      if (!d) {
+        return (
+          <div key={key} className="border rounded p-2 bg-white text-[11px] text-gray-500">
+            {title}（{metricJp(bestMetric)}）：データなし
+          </div>
+        );
+      }
+      const bean = beans.find(b=> String(b.id)===String(d.bean_id));
+      const radarData = [
+        {subject:'クリーンさ',  value:Number(d?.ratings?.clean)||0},
+        {subject:'風味',        value:Number(d?.ratings?.flavor)||0},
+        {subject:'酸味',        value:Number(d?.ratings?.acidity)||0},
+        {subject:'苦味',        value:Number(d?.ratings?.bitterness)||0},
+        {subject:'甘味',        value:Number(d?.ratings?.sweetness)||0},
+        {subject:'コク',        value:Number(d?.ratings?.body)||0},
+        {subject:'後味',        value:Number(d?.ratings?.aftertaste)||0},
+      ];
+      const color =
+        scope === 'thisBean' ? RADAR_COLORS.thisBeanBest
+        : scope === 'sameRoast' ? RADAR_COLORS.sameRoastBest
+        : RADAR_COLORS.originNearBest;
+      return (
+        <div key={key} className="border rounded bg-white p-2 flex flex-col gap-1">
+          <div className="flex items-center justify-between">
+            <div className="text-xs font-semibold">{title}（{metricJp(bestMetric)}）</div>
+            <button
+              type="button"
+              onClick={()=> applyFromDrip(d)}
+              className="px-2 py-0.5 rounded border bg-white hover:bg-gray-50 text-[11px]"
+            >
+              適用
+            </button>
+          </div>
+          <ChartFrame aspect={0.9} className="min-h-[160px]">
+            <RadarChart data={radarData} margin={{ top: 4, right: 4, bottom: 4, left: 4 }}>
+              <PolarGrid />
+              <PolarAngleAxis dataKey="subject" tick={{ fontSize: 10 }} />
+              <PolarRadiusAxis angle={30} domain={[0,10]} tick={{ fontSize: 9 }} />
+              <Radar name={title} dataKey="value" stroke={color.stroke} fill={color.fill} fillOpacity={0.32} />
+              <Tooltip />
+            </RadarChart>
+          </ChartFrame>
+          <div className="text-[11px] whitespace-pre-wrap leading-5">
+            {makeMultilineLabel(d, bean, title, bestMetric)}
+          </div>
+        </div>
+      );
+    })}
       {/* 平均 */}
       {showCharts.average && Object.keys(beanAvgRatings||{}).length > 0 && (
         <div className="border rounded bg-white p-2 flex flex-col gap-1" key="avg">
