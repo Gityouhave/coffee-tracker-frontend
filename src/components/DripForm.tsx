@@ -247,6 +247,14 @@ const [beanAvgRatings, setBeanAvgRatings] =
   // 暫定最適：2系統のベスト
   const [bestSameRoast, setBestSameRoast] = useState<any|null>(null)
   const [bestOriginNear, setBestOriginNear] = useState<any|null>(null)
+  type SectionKey = 'radar' | 'byMethod' | 'corrTemp' | 'corrTime';
+
+const [showSection, setShowSection] = useState<Record<SectionKey, boolean>>({
+  radar: true,       // レーダーチャート
+  byMethod: true,    // 抽出方法別バー
+  corrTemp: true,    // 温度Δ vs 評価
+  corrTime: true,    // 時間Δ vs 評価
+});
 
   // セレクト＆適用ボタン用
   type BestPattern = {
@@ -794,6 +802,25 @@ const RatingSelect = ({
 
       {/* セオリー & 統計 */}
       <div className="bg-gray-50 border rounded p-2 space-y-2 text-sm">
+        {/* 表示するグラフの選択 */}
+<div className="flex flex-wrap items-center gap-3 text-xs">
+  <span className="text-gray-600">表示するグラフ：</span>
+  {([
+    { k:'radar',     label:'レーダー' },
+    { k:'byMethod',  label:'方法別バー' },
+    { k:'corrTemp',  label:'相関（温度Δ）' },
+    { k:'corrTime',  label:'相関（時間Δ）' },
+  ] as {k:SectionKey; label:string}[]).map(s=>(
+    <label key={s.k} className="inline-flex items-center gap-1">
+      <input
+        type="checkbox"
+        checked={showSection[s.k]}
+        onChange={e=> setShowSection(v=> ({ ...v, [s.k]: e.target.checked }))}
+      />
+      <span>{s.label}</span>
+    </label>
+  ))}
+</div>
         <div className="font-semibold">選択豆：{selBean?.name ?? '--'}</div>
 
         <TheoryRow label="産地セオリー" theory={originTheoryText()} value={selBean?.origin} show={!!form.bean_id}/>
@@ -811,7 +838,7 @@ const RatingSelect = ({
         {hasAvg && (<div className="text-sm">平均評価（★）：<StarRow avg={beanStats?.avg_overall} /></div>)}
 
         {/* レーダー：この豆の平均 / 同焙煎度ベスト / 同産地×近焙煎度ベスト */}
-        {hasRadar && (
+        {hasRadar && showSection.radar && ( 
   <div className="space-y-2">
     {/* 表示切替UI */}
     <div className="flex flex-wrap items-center gap-2 text-xs">
@@ -907,7 +934,7 @@ const RatingSelect = ({
             記録数：{beanStats.count}　平均：{beanStats.avg_overall}　最高：{beanStats.max_overall}
           </div>
         )}
-        {hasByMethod && (
+        {hasByMethod && showSection.byMethod && (
           <div className="h-40">
             <ResponsiveContainer>
               <BarChart data={beanStats.by_method}>
@@ -935,7 +962,7 @@ const RatingSelect = ({
 
         {/* 湯温差 vs 指標 */}
         <div>
-          {hasPairsTemp && (
+          {hasPairsTemp && showSection.corrTemp && (
             <div>
               <div className="font-semibold mb-1">
                 湯温差（実測−推奨） vs {yAccessor.label}
@@ -958,7 +985,7 @@ const RatingSelect = ({
 
         {/* 時間差 vs 指標 */}
         <div>
-          {hasPairsTime && (
+          {hasPairsTime && showSection.corrTime && (
             <div>
               <div className="font-semibold mb-1">
                 時間差（実測秒−推奨秒） vs {yAccessor.label}
