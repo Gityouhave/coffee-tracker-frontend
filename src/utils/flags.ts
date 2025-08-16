@@ -48,3 +48,23 @@ export const splitOrigins = (origins?: string | null) => {
     .map(s => s.trim())
     .filter(Boolean);
 };
+// --- ここから追記: origin のカンマ区切り文字列を国旗付きで整形 ---
+/**
+ * "コロンビア, ブラジル" → "🇨🇴コロンビア, 🇧🇷ブラジル"
+ * 空/undefined/null は空文字を返す
+ */
+export function flagifyOriginLine(line?: string | null): string {
+  if (!line) return '';
+  return String(line)
+    .split(',')
+    .map(s => s.trim())
+    .filter(Boolean)
+    .map(flagify)
+    .join(', ');
+}
+
+/** ["コロンビア","ブラジル"] → "🇨🇴コロンビア, 🇧🇷ブラジル" */
+export function flagifyJoin(origins: string[]): string {
+  return (origins || []).map(flagify).join(', ');
+}
+// --- 追記ここまで ---
