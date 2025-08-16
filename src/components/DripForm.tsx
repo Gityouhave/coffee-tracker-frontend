@@ -726,15 +726,15 @@ export function DripForm({API, beans, onSaved}:{API:string; beans:any[]; onSaved
 
   const hasPairsTemp = (beanPairsTemp.length > 0)
   const hasPairsTime = (beanPairsTime.length > 0)
-+  const hasRadar = useMemo(() => {
-+    const hasAvgMap = Object.keys(beanAvgRatings || {}).length > 0;
-+    const anyBest =
-+      !!(bestByScopeMetric?.thisBean?.[bestMetric] ||
-+         bestByScopeMetric?.sameRoast?.[bestMetric] ||
-+         bestByScopeMetric?.originNear?.[bestMetric]);
-+    const hasLast = !!last;
-+    return hasAvgMap || anyBest || hasLast;
-+  }, [beanAvgRatings, bestByScopeMetric, bestMetric, last]);
+  const hasRadar = useMemo(() => {
+    const hasAvgMap = Object.keys(beanAvgRatings || {}).length > 0;
+    const anyBest =
+      !!(bestByScopeMetric?.thisBean?.[bestMetric] ||
+         bestByScopeMetric?.sameRoast?.[bestMetric] ||
+         bestByScopeMetric?.originNear?.[bestMetric]);
+    const hasLast = !!last;
+    return hasAvgMap || anyBest || hasLast;
+  }, [beanAvgRatings, bestByScopeMetric, bestMetric, last]);
   return (
     <form onSubmit={submit} className="space-y-4">
       {/* ソート・絞り込み */}
@@ -928,77 +928,77 @@ export function DripForm({API, beans, onSaved}:{API:string; beans:any[]; onSaved
       )}
 
         {/* 追加：前回 */}
-+            {last ? (
-+              <div className="border rounded bg-white p-3 flex flex-col gap-2" key="last">
-+                <div className="flex items-center justify-between">
-+                  <div className="text-sm font-semibold">前回（{metricJp(bestMetric)}）</div>
-+                  <button
-+                    type="button"
-+                    onClick={()=> applyFromDrip(last)}
-+                    className="px-2 py-1 rounded border bg-white hover:bg-gray-50 text-xs"
-+                  >
-+                    この値を適用
-+                  </button>
-+                </div>
-+                <div className="h-56">
-+                  <ResponsiveContainer>
-+                    <RadarChart data={[
-+                      {subject:'クリーンさ',  value:Number(last?.ratings?.clean)||0},
-+                      {subject:'風味',        value:Number(last?.ratings?.flavor)||0},
-+                      {subject:'酸味',        value:Number(last?.ratings?.acidity)||0},
-+                      {subject:'苦味',        value:Number(last?.ratings?.bitterness)||0},
-+                      {subject:'甘味',        value:Number(last?.ratings?.sweetness)||0},
-+                      {subject:'コク',        value:Number(last?.ratings?.body)||0},
-+                      {subject:'後味',        value:Number(last?.ratings?.aftertaste)||0},
-+                    ]}>
-+                      <PolarGrid />
-+                      <PolarAngleAxis dataKey="subject" />
-+                      <PolarRadiusAxis angle={30} domain={[0,10]} />
-+                      <Radar name="前回" dataKey="value"
-+                        stroke={RADAR_COLORS.last.stroke} fill={RADAR_COLORS.last.fill} fillOpacity={0.35} />
-+                      <Tooltip />
-+                    </RadarChart>
-+                  </ResponsiveContainer>
-+                </div>
-+                <div className="text-xs whitespace-pre-wrap leading-5">
-+                  {selBean ? makeMultilineLabel(last, selBean, '前回', bestMetric) : '—'}
-+                </div>
-+              </div>
-+            ) : (
-+              <div className="border rounded p-3 bg-white text-xs text-gray-500" key="last-empty">前回：データなし</div>
-+            )}
-+
-+            {/* 追加：平均 */}
-+            {Object.keys(beanAvgRatings||{}).length ? (
-+              <div className="border rounded bg-white p-3 flex flex-col gap-2" key="avg">
-+                <div className="text-sm font-semibold">平均（{metricJp(bestMetric)}）</div>
-+                <div className="h-56">
-+                  <ResponsiveContainer>
-+                    <RadarChart data={[
-+                      {subject:'クリーンさ',  value:Number(beanAvgRatings.clean)||0},
-+                      {subject:'風味',        value:Number(beanAvgRatings.flavor)||0},
-+                      {subject:'酸味',        value:Number(beanAvgRatings.acidity)||0},
-+                      {subject:'苦味',        value:Number(beanAvgRatings.bitterness)||0},
-+                      {subject:'甘味',        value:Number(beanAvgRatings.sweetness)||0},
-+                      {subject:'コク',        value:Number(beanAvgRatings.body)||0},
-+                      {subject:'後味',        value:Number(beanAvgRatings.aftertaste)||0},
-+                    ]}>
-+                      <PolarGrid />
-+                      <PolarAngleAxis dataKey="subject" />
-+                      <PolarRadiusAxis angle={30} domain={[0,10]} />
-+                      <Radar name="平均" dataKey="value"
-+                        stroke={RADAR_COLORS.beanAvg.stroke} fill={RADAR_COLORS.beanAvg.fill} fillOpacity={0.35} />
-+                      <Tooltip />
-+                    </RadarChart>
-+                  </ResponsiveContainer>
-+                </div>
-+                <div className="text-xs text-gray-500">
-+                  直近の同豆ドリップ平均（7項目）
-+                </div>
-+              </div>
-+            ) : (
-+              <div className="border rounded p-3 bg-white text-xs text-gray-500" key="avg-empty">平均：データなし</div>
-+            )}
+            {last ? (
+              <div className="border rounded bg-white p-3 flex flex-col gap-2" key="last">
+                <div className="flex items-center justify-between">
+                  <div className="text-sm font-semibold">前回（{metricJp(bestMetric)}）</div>
+                  <button
+                    type="button"
+                    onClick={()=> applyFromDrip(last)}
+                    className="px-2 py-1 rounded border bg-white hover:bg-gray-50 text-xs"
+                  >
+                    この値を適用
+                  </button>
+                </div>
+                <div className="h-56">
+                  <ResponsiveContainer>
+                    <RadarChart data={[
+                      {subject:'クリーンさ',  value:Number(last?.ratings?.clean)||0},
+                      {subject:'風味',        value:Number(last?.ratings?.flavor)||0},
+                      {subject:'酸味',        value:Number(last?.ratings?.acidity)||0},
+                      {subject:'苦味',        value:Number(last?.ratings?.bitterness)||0},
+                      {subject:'甘味',        value:Number(last?.ratings?.sweetness)||0},
+                      {subject:'コク',        value:Number(last?.ratings?.body)||0},
+                      {subject:'後味',        value:Number(last?.ratings?.aftertaste)||0},
+                    ]}>
+                      <PolarGrid />
+                      <PolarAngleAxis dataKey="subject" />
+                      <PolarRadiusAxis angle={30} domain={[0,10]} />
+                      <Radar name="前回" dataKey="value"
+                        stroke={RADAR_COLORS.last.stroke} fill={RADAR_COLORS.last.fill} fillOpacity={0.35} />
+                      <Tooltip />
+                    </RadarChart>
+                  </ResponsiveContainer>
+                </div>
+                <div className="text-xs whitespace-pre-wrap leading-5">
+                  {selBean ? makeMultilineLabel(last, selBean, '前回', bestMetric) : '—'}
+                </div>
+              </div>
+            ) : (
+              <div className="border rounded p-3 bg-white text-xs text-gray-500" key="last-empty">前回：データなし</div>
+            )}
+
+            {/* 追加：平均 */}
+            {Object.keys(beanAvgRatings||{}).length ? (
+              <div className="border rounded bg-white p-3 flex flex-col gap-2" key="avg">
+                <div className="text-sm font-semibold">平均（{metricJp(bestMetric)}）</div>
+                <div className="h-56">
+                  <ResponsiveContainer>
+                    <RadarChart data={[
+                      {subject:'クリーンさ',  value:Number(beanAvgRatings.clean)||0},
+                      {subject:'風味',        value:Number(beanAvgRatings.flavor)||0},
+                      {subject:'酸味',        value:Number(beanAvgRatings.acidity)||0},
+                      {subject:'苦味',        value:Number(beanAvgRatings.bitterness)||0},
+                      {subject:'甘味',        value:Number(beanAvgRatings.sweetness)||0},
+                      {subject:'コク',        value:Number(beanAvgRatings.body)||0},
+                      {subject:'後味',        value:Number(beanAvgRatings.aftertaste)||0},
+                    ]}>
+                      <PolarGrid />
+                      <PolarAngleAxis dataKey="subject" />
+                      <PolarRadiusAxis angle={30} domain={[0,10]} />
+                      <Radar name="平均" dataKey="value"
+                        stroke={RADAR_COLORS.beanAvg.stroke} fill={RADAR_COLORS.beanAvg.fill} fillOpacity={0.35} />
+                      <Tooltip />
+                    </RadarChart>
+                  </ResponsiveContainer>
+                </div>
+                <div className="text-xs text-gray-500">
+                  直近の同豆ドリップ平均（7項目）
+                </div>
+              </div>
+            ) : (
+              <div className="border rounded p-3 bg-white text-xs text-gray-500" key="avg-empty">平均：データなし</div>
+            )}
            </div>
 
         {/* 豆ごとバー（抽出方法別平均） */}
