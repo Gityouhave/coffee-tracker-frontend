@@ -779,6 +779,17 @@ const toggleChart = (k: RadarItemKeyExt) => setShowCharts(s => ({ ...s, [k]: !s[
     const hasLast = !!last;
     return hasAvgMap || anyBest || hasLast;
   }, [beanAvgRatings, bestByScopeMetric, bestMetric, last]);
+  // === レーダーカードの2行分割ヘルパ ===
+// 5→3,2／6→3,3／7→4,3／8→4,4 で並べる
+const splitForNiceRows = (nodes: React.ReactNode[]) => {
+  const n = nodes.length;
+  const first =
+    n <= 4 ? n :
+    (n === 5 ? 3 :
+     n === 6 ? 3 :
+     n === 7 ? 4 : 4); // 8以上は4/残りに分割
+  return [nodes.slice(0, first), nodes.slice(first)];
+};
   return (
     <form onSubmit={submit} className="space-y-4">
       {/* ソート・絞り込み */}
@@ -946,93 +957,21 @@ const toggleChart = (k: RadarItemKeyExt) => setShowCharts(s => ({ ...s, [k]: !s[
       </select>
     </div>
 
-    {/* コンパクトなカードグリッド（ベスト3 + ワースト3） */}
-    <div className="grid gap-2 [grid-template-columns:repeat(auto-fit,minmax(220px,1fr))]">
-      {/* 同豆・同焙煎・近焙煎 */}
-      {(['thisBean','sameRoast','originNear'] as const).map(scope => {
-        if (!showCharts[scope]) return null;
-        const d = bestByScopeMetric?.[scope]?.[bestMetric];
-        const title = scopeTitle(scope as ScopeKey);
-        if (!d) {
-          return (
-            <div key={scope} className="border rounded p-2 bg-white text-[11px] text-gray-500">
-              {title}（{metricJp(bestMetric)}）：データなし
-            </div>
-          );
-        }
-        const bean = beans.find(b=> String(b.id)===String(d.bean_id));
-        const radarData = [
-          {subject:'クリーンさ',  value:Number(d?.ratings?.clean)||0},
-          {subject:'風味',        value:Number(d?.ratings?.flavor)||0},
-          {subject:'酸味',        value:Number(d?.ratings?.acidity)||0},
-          {subject:'苦味',        value:Number(d?.ratings?.bitterness)||0},
-          {subject:'甘味',        value:Number(d?.ratings?.sweetness)||0},
-          {subject:'コク',        value:Number(d?.ratings?.body)||0},
-          {subject:'後味',        value:Number(d?.ratings?.aftertaste)||0},
-        ];
-        const color =
-          scope === 'thisBean' ? RADAR_COLORS.thisBeanBest
-          : scope === 'sameRoast' ? RADAR_COLORS.sameRoastBest
-          : RADAR_COLORS.originNearBest;
+ {/* コンパクトなカードグリッド（ベスト3 + ワースト3） */}
+{(() => {
+  // まずカードを配列にためる
+  const cards: React.ReactNode[] = [];
 
-        return (
-          <div key={scope} className="border rounded bg-white p-2 flex flex-col gap-1">
-            <div className="flex items-center justify-between">
-              <div className="text-xs font-semibold">{title}（{metricJp(bestMetric)}）</div>
-              <button
-                type="button"
-                onClick={()=> applyFromDrip(d)}
-                className="px-2 py-0.5 rounded border bg-white hover:bg-gray-50 text-[11px]"
-              >
-                適用
-              </button>
-            </div>
-            <ChartFrame aspect={0.9} className="min-h-[160px]">
-              <RadarChart data={radarData} margin={{ top: 4, right: 4, bottom: 4, left: 4 }}>
-                <PolarGrid />
-                <PolarAngleAxis dataKey="subject" tick={{ fontSize: 10 }} />
-                <PolarRadiusAxis angle={30} domain={[0,10]} tick={{ fontSize: 9 }} />
-                <Radar name={title} dataKey="value" stroke={color.stroke} fill={color.fill} fillOpacity={0.32} />
-                <Tooltip />
-              </RadarChart>
-            </ChartFrame>
-            <div className="text-[11px] whitespace-pre-wrap leading-5">
-              {makeMultilineLabel(d, bean, title, bestMetric)}
-            </div>
-          </div>
-        );
-      })}
-{/* ワースト3種 */}
-    {(['thisBean','sameRoast','originNear'] as const).map(scope => {
-      const key = (scope+'Worst') as 'thisBeanWorst'|'sameRoastWorst'|'originNearWorst';
-      if (!showCharts[key]) return null;
-      const d = worstByScopeMetric?.[scope]?.[bestMetric];
-      const title = scopeTitleWorst(scope as ScopeKey);
-      if (!d) {
-        return (
-          <div key={key} className="border rounded p-2 bg-white text-[11px] text-gray-500">
-            {title}（{metricJp(bestMetric)}）：データなし
-          </div>
-        );
-      }
-      const bean = beans.find(b=> String(b.id)===String(d.bean_id));
-      const radarData = [
-        {subject:'クリーンさ',  value:Number(d?.ratings?.clean)||0},
-        {subject:'風味',        value:Number(d?.ratings?.flavor)||0},
-        {subject:'酸味',        value:Number(d?.ratings?.acidity)||0},
-        {subject:'苦味',        value:Number(d?.ratings?.bitterness)||0},
-        {subject:'甘味',        value:Number(d?.ratings?.sweetness)||0},
-        {subject:'コク',        value:Number(d?.ratings?.body)||0},
-        {subject:'後味',        value:Number(d?.ratings?.aftertaste)||0},
-      ];
-      const color =
-        scope === 'thisBean' ? RADAR_COLORS.thisBeanBest
-        : scope === 'sameRoast' ? RADAR_COLORS.sameRoastBest
-        : RADAR_COLORS.originNearBest;
-      return (
-        <div key={key} className="border rounded bg-white p-2 flex flex-col gap-1">
-          <div className="flex items-center justify-between">
-            <div className="text-xs font-semibold">{title}（{metricJp(bestMetric)}）</div>
+  // ベスト3
+  (['thisBean','sameRoast','originNear'] as const).forEach(scope => {
+    if (!showCharts[scope]) return;
+    const d = bestByScopeMetric?.[scope]?.[bestMetric];
+    const title = scopeTitle(scope as ScopeKey);
+    cards.push(
+      <div key={`best-${scope}`} className="border rounded bg-white p-2 flex flex-col gap-1">
+        <div className="flex items-center justify-between">
+          <div className="text-xs font-semibold">{title}（{metricJp(bestMetric)}）</div>
+          {d && (
             <button
               type="button"
               onClick={()=> applyFromDrip(d)}
@@ -1040,83 +979,192 @@ const toggleChart = (k: RadarItemKeyExt) => setShowCharts(s => ({ ...s, [k]: !s[
             >
               適用
             </button>
-          </div>
-          <ChartFrame aspect={0.9} className="min-h-[160px]">
-            <RadarChart data={radarData} margin={{ top: 4, right: 4, bottom: 4, left: 4 }}>
-              <PolarGrid />
-              <PolarAngleAxis dataKey="subject" tick={{ fontSize: 10 }} />
-              <PolarRadiusAxis angle={30} domain={[0,10]} tick={{ fontSize: 9 }} />
-              <Radar name={title} dataKey="value" stroke={color.stroke} fill={color.fill} fillOpacity={0.32} />
-              <Tooltip />
-            </RadarChart>
-          </ChartFrame>
-          <div className="text-[11px] whitespace-pre-wrap leading-5">
-            {makeMultilineLabel(d, bean, title, bestMetric)}
-          </div>
+          )}
         </div>
-      );
-    })}
-      {/* 平均 */}
-      {showCharts.average && Object.keys(beanAvgRatings||{}).length > 0 && (
-        <div className="border rounded bg-white p-2 flex flex-col gap-1" key="avg">
-          <div className="text-xs font-semibold">平均（{metricJp(bestMetric)}）</div>
-          <ChartFrame aspect={0.9} className="min-h-[160px]">
-            <RadarChart data={[
-              {subject:'クリーンさ',  value:Number(beanAvgRatings.clean)||0},
-              {subject:'風味',        value:Number(beanAvgRatings.flavor)||0},
-              {subject:'酸味',        value:Number(beanAvgRatings.acidity)||0},
-              {subject:'苦味',        value:Number(beanAvgRatings.bitterness)||0},
-              {subject:'甘味',        value:Number(beanAvgRatings.sweetness)||0},
-              {subject:'コク',        value:Number(beanAvgRatings.body)||0},
-              {subject:'後味',        value:Number(beanAvgRatings.aftertaste)||0},
-            ]} margin={{ top: 4, right: 4, bottom: 4, left: 4 }}>
-              <PolarGrid />
-              <PolarAngleAxis dataKey="subject" tick={{ fontSize: 10 }} />
-              <PolarRadiusAxis angle={30} domain={[0,10]} tick={{ fontSize: 9 }} />
-              <Radar name="平均" dataKey="value" stroke={RADAR_COLORS.beanAvg.stroke} fill={RADAR_COLORS.beanAvg.fill} fillOpacity={0.32} />
-              <Tooltip />
-            </RadarChart>
-          </ChartFrame>
-          <div className="text-[11px] text-gray-500">直近の同豆ドリップ平均（7項目）</div>
+        <ChartFrame aspect={0.9} className="min-h-[160px]">
+          <RadarChart data={[
+            {subject:'クリーンさ',  value:Number(d?.ratings?.clean)||0},
+            {subject:'風味',        value:Number(d?.ratings?.flavor)||0},
+            {subject:'酸味',        value:Number(d?.ratings?.acidity)||0},
+            {subject:'苦味',        value:Number(d?.ratings?.bitterness)||0},
+            {subject:'甘味',        value:Number(d?.ratings?.sweetness)||0},
+            {subject:'コク',        value:Number(d?.ratings?.body)||0},
+            {subject:'後味',        value:Number(d?.ratings?.aftertaste)||0},
+          ]} margin={{ top: 4, right: 4, bottom: 4, left: 4 }}>
+            <PolarGrid />
+            <PolarAngleAxis dataKey="subject" tick={{ fontSize: 10 }} />
+            <PolarRadiusAxis angle={30} domain={[0,10]} tick={{ fontSize: 9 }} />
+            <Radar
+              name={title}
+              dataKey="value"
+              stroke={
+                scope==='thisBean' ? RADAR_COLORS.thisBeanBest.stroke
+                : scope==='sameRoast' ? RADAR_COLORS.sameRoastBest.stroke
+                : RADAR_COLORS.originNearBest.stroke
+              }
+              fill={
+                scope==='thisBean' ? RADAR_COLORS.thisBeanBest.fill
+                : scope==='sameRoast' ? RADAR_COLORS.sameRoastBest.fill
+                : RADAR_COLORS.originNearBest.fill
+              }
+              fillOpacity={0.32}
+            />
+            <Tooltip />
+          </RadarChart>
+        </ChartFrame>
+        <div className="text-[11px] whitespace-pre-wrap leading-5">
+          {d ? makeMultilineLabel(d, beans.find(b=> String(b.id)===String(d.bean_id)), title, bestMetric)
+             : `${title}（${metricJp(bestMetric)}）：データなし`}
         </div>
-      )}
+      </div>
+    );
+  });
 
-      {/* 前回 */}
-      {showCharts.previous && last && (
-        <div className="border rounded bg-white p-2 flex flex-col gap-1" key="last">
-          <div className="flex items-center justify-between">
-            <div className="text-xs font-semibold">前回（{metricJp(bestMetric)}）</div>
+  // ワースト3
+  (['thisBean','sameRoast','originNear'] as const).forEach(scope => {
+    const key = (scope+'Worst') as 'thisBeanWorst'|'sameRoastWorst'|'originNearWorst';
+    if (!showCharts[key]) return;
+    const d = worstByScopeMetric?.[scope]?.[bestMetric];
+    const title = scopeTitleWorst(scope as ScopeKey);
+    cards.push(
+      <div key={`worst-${scope}`} className="border rounded bg-white p-2 flex flex-col gap-1">
+        <div className="flex items-center justify-between">
+          <div className="text-xs font-semibold">{title}（{metricJp(bestMetric)}）</div>
+          {d && (
             <button
               type="button"
-              onClick={()=> applyFromDrip(last)}
+              onClick={()=> applyFromDrip(d)}
               className="px-2 py-0.5 rounded border bg-white hover:bg-gray-50 text-[11px]"
             >
               適用
             </button>
-          </div>
-          <ChartFrame aspect={0.9} className="min-h-[160px]">
-            <RadarChart data={[
-              {subject:'クリーンさ',  value:Number(last?.ratings?.clean)||0},
-              {subject:'風味',        value:Number(last?.ratings?.flavor)||0},
-              {subject:'酸味',        value:Number(last?.ratings?.acidity)||0},
-              {subject:'苦味',        value:Number(last?.ratings?.bitterness)||0},
-              {subject:'甘味',        value:Number(last?.ratings?.sweetness)||0},
-              {subject:'コク',        value:Number(last?.ratings?.body)||0},
-              {subject:'後味',        value:Number(last?.ratings?.aftertaste)||0},
-            ]} margin={{ top: 4, right: 4, bottom: 4, left: 4 }}>
-              <PolarGrid />
-              <PolarAngleAxis dataKey="subject" tick={{ fontSize: 10 }} />
-              <PolarRadiusAxis angle={30} domain={[0,10]} tick={{ fontSize: 9 }} />
-              <Radar name="前回" dataKey="value" stroke={RADAR_COLORS.last.stroke} fill={RADAR_COLORS.last.fill} fillOpacity={0.32} />
-              <Tooltip />
-            </RadarChart>
-          </ChartFrame>
-          <div className="text-[11px] whitespace-pre-wrap leading-5">
-            {selBean ? makeMultilineLabel(last, selBean, '前回', bestMetric) : '—'}
-          </div>
+          )}
+        </div>
+        <ChartFrame aspect={0.9} className="min-h-[160px]">
+          <RadarChart data={[
+            {subject:'クリーンさ',  value:Number(d?.ratings?.clean)||0},
+            {subject:'風味',        value:Number(d?.ratings?.flavor)||0},
+            {subject:'酸味',        value:Number(d?.ratings?.acidity)||0},
+            {subject:'苦味',        value:Number(d?.ratings?.bitterness)||0},
+            {subject:'甘味',        value:Number(d?.ratings?.sweetness)||0},
+            {subject:'コク',        value:Number(d?.ratings?.body)||0},
+            {subject:'後味',        value:Number(d?.ratings?.aftertaste)||0},
+          ]} margin={{ top: 4, right: 4, bottom: 4, left: 4 }}>
+            <PolarGrid />
+            <PolarAngleAxis dataKey="subject" tick={{ fontSize: 10 }} />
+            <PolarRadiusAxis angle={30} domain={[0,10]} tick={{ fontSize: 9 }} />
+            <Radar
+              name={title}
+              dataKey="value"
+              stroke={
+                scope==='thisBean' ? RADAR_COLORS.thisBeanBest.stroke
+                : scope==='sameRoast' ? RADAR_COLORS.sameRoastBest.stroke
+                : RADAR_COLORS.originNearBest.stroke
+              }
+              fill={
+                scope==='thisBean' ? RADAR_COLORS.thisBeanBest.fill
+                : scope==='sameRoast' ? RADAR_COLORS.sameRoastBest.fill
+                : RADAR_COLORS.originNearBest.fill
+              }
+              fillOpacity={0.32}
+            />
+            <Tooltip />
+          </RadarChart>
+        </ChartFrame>
+        <div className="text-[11px] whitespace-pre-wrap leading-5">
+          {d ? makeMultilineLabel(d, beans.find(b=> String(b.id)===String(d.bean_id)), title, bestMetric)
+             : `${title}（${metricJp(bestMetric)}）：データなし`}
+        </div>
+      </div>
+    );
+  });
+
+  // 平均/前回（任意で追加）
+  if (showCharts.average && Object.keys(beanAvgRatings||{}).length > 0) {
+    cards.push(
+      <div key="avg" className="border rounded bg-white p-2 flex flex-col gap-1">
+        <div className="text-xs font-semibold">平均（{metricJp(bestMetric)}）</div>
+        <ChartFrame aspect={0.9} className="min-h-[160px]">
+          <RadarChart data={[
+            {subject:'クリーンさ',  value:Number(beanAvgRatings.clean)||0},
+            {subject:'風味',        value:Number(beanAvgRatings.flavor)||0},
+            {subject:'酸味',        value:Number(beanAvgRatings.acidity)||0},
+            {subject:'苦味',        value:Number(beanAvgRatings.bitterness)||0},
+            {subject:'甘味',        value:Number(beanAvgRatings.sweetness)||0},
+            {subject:'コク',        value:Number(beanAvgRatings.body)||0},
+            {subject:'後味',        value:Number(beanAvgRatings.aftertaste)||0},
+          ]} margin={{ top: 4, right: 4, bottom: 4, left: 4 }}>
+            <PolarGrid />
+            <PolarAngleAxis dataKey="subject" tick={{ fontSize: 10 }} />
+            <PolarRadiusAxis angle={30} domain={[0,10]} tick={{ fontSize: 9 }} />
+            <Radar name="平均" dataKey="value"
+              stroke={RADAR_COLORS.beanAvg.stroke}
+              fill={RADAR_COLORS.beanAvg.fill}
+              fillOpacity={0.32}
+            />
+            <Tooltip />
+          </RadarChart>
+        </ChartFrame>
+      </div>
+    );
+  }
+  if (showCharts.previous && last) {
+    cards.push(
+      <div key="last" className="border rounded bg-white p-2 flex flex-col gap-1">
+        <div className="flex items-center justify-between">
+          <div className="text-xs font-semibold">前回（{metricJp(bestMetric)}）</div>
+          <button
+            type="button"
+            onClick={()=> applyFromDrip(last)}
+            className="px-2 py-0.5 rounded border bg-white hover:bg-gray-50 text-[11px]"
+          >
+            適用
+          </button>
+        </div>
+        <ChartFrame aspect={0.9} className="min-h-[160px]">
+          <RadarChart data={[
+            {subject:'クリーンさ',  value:Number(last?.ratings?.clean)||0},
+            {subject:'風味',        value:Number(last?.ratings?.flavor)||0},
+            {subject:'酸味',        value:Number(last?.ratings?.acidity)||0},
+            {subject:'苦味',        value:Number(last?.ratings?.bitterness)||0},
+            {subject:'甘味',        value:Number(last?.ratings?.sweetness)||0},
+            {subject:'コク',        value:Number(last?.ratings?.body)||0},
+            {subject:'後味',        value:Number(last?.ratings?.aftertaste)||0},
+          ]} margin={{ top: 4, right: 4, bottom: 4, left: 4 }}>
+            <PolarGrid />
+            <PolarAngleAxis dataKey="subject" tick={{ fontSize: 10 }} />
+            <PolarRadiusAxis angle={30} domain={[0,10]} tick={{ fontSize: 9 }} />
+            <Radar name="前回" dataKey="value"
+              stroke={RADAR_COLORS.last.stroke}
+              fill={RADAR_COLORS.last.fill}
+              fillOpacity={0.32}
+            />
+            <Tooltip />
+          </RadarChart>
+        </ChartFrame>
+        <div className="text-[11px] whitespace-pre-wrap leading-5">
+          {selBean ? makeMultilineLabel(last, selBean, '前回', bestMetric) : '—'}
+        </div>
+      </div>
+    );
+  }
+
+  // ここで 2行に分割して描画（中央寄せ・最大4カラム想定）
+  const [row1, row2] = splitForNiceRows(cards);
+
+  return (
+    <>
+      <div className="grid gap-2 justify-center [grid-template-columns:repeat(auto-fit,minmax(220px,1fr))] max-w-[1100px] mx-auto">
+        {row1}
+      </div>
+      {row2.length > 0 && (
+        <div className="grid gap-2 justify-center mt-2 [grid-template-columns:repeat(auto-fit,minmax(220px,1fr))] max-w-[1100px] mx-auto">
+          {row2}
         </div>
       )}
-    </div>
+    </>
+  );
+})()}
   </div>
 )}
 
@@ -1160,7 +1208,7 @@ const toggleChart = (k: RadarItemKeyExt) => setShowCharts(s => ({ ...s, [k]: !s[
  <ChartFrame aspect={2.4} className="max-h-[180px]">
    <ScatterChart margin={{ top: 4, right: 8, bottom: 4, left: 0 }}>
     <CartesianGrid />
-    <XAxis dataKey="_deltas.temp_delta" name="tempΔ(°C)" tick={{ fontSize: 10 }} />
+    <XAxis dataKey="_deltas.time_delta" name="timeΔ(s)" tick={{ fontSize: 10 }} />
      <YAxis dataKey={yAccessor.key} name={yAccessor.label} tick={{ fontSize: 10 }} />
     <Tooltip />
 <Scatter name="drips" data={beanDrips} shape="circle" r={2} />
@@ -1182,7 +1230,7 @@ const toggleChart = (k: RadarItemKeyExt) => setShowCharts(s => ({ ...s, [k]: !s[
               <ChartFrame aspect={2.4} className="max-h-[180px]">
    <ScatterChart margin={{ top: 4, right: 8, bottom: 4, left: 0 }}>
     <CartesianGrid />
-    <XAxis dataKey="_deltas.temp_delta" name="tempΔ(°C)" tick={{ fontSize: 10 }} />
+    <XAxis dataKey="_deltas.time_delta" name="timeΔ(s)" tick={{ fontSize: 10 }} />
      <YAxis dataKey={yAccessor.key} name={yAccessor.label} tick={{ fontSize: 10 }} />
     <Tooltip />
     <Scatter name="drips" data={beanDrips} shape="circle" r={2} />
