@@ -106,6 +106,27 @@ const deltaTime = (actualSec?:number|null, recSec?:number|null) => {
   return `(${sign}${mm}:${String(ss).padStart(2,'0')})`;
 };
 // === END: radar & flags helpers ===
+// 安全に「国旗テキストを '・' で連結」するヘルパー
+const joinFlags = (originsRaw:any) => {
+  try {
+    const arr = Array.isArray(originsRaw)
+      ? originsRaw
+      : String(originsRaw||'')
+          .split(',')
+          .map(s=>s.trim())
+          .filter(Boolean);
+    const flagged = flagifyOriginList(arr as string[]); // utils/flags
+    return Array.isArray(flagged) ? flagged.join('・') : String(flagged);
+  } catch {
+    // 失敗したら素朴に flagify を当てて繋ぐ
+    try {
+      const arr = Array.isArray(originsRaw) ? originsRaw : String(originsRaw||'').split(',').map(s=>s.trim()).filter(Boolean);
+      return (arr as string[]).map(c=>flagify(c)).join('・');
+    } catch {
+      return '—';
+    }
+  }
+};
 const metricLabel = (k: TasteKey) =>
   k==='overall'?'総合':k==='clean'?'クリーンさ':k==='flavor'?'風味':k==='acidity'?'酸味':k==='bitterness'?'苦味':k==='sweetness'?'甘味':k==='body'?'コク':'後味';
 
@@ -123,7 +144,7 @@ const flagifyOrigins = (orig?: string | string[] | null) => {
 // 統一フォーマットのラベル（豆名（旗｜焙煎｜エイジング｜★総合）／ドリッパー：…｜〈基準〉値）
 const mkLabelSub = (d:any, bean:any, basisMetric: TasteKey = 'overall')=>{
   const origins = bean?.origin ? splitOrigins(String(bean.origin)) : [];
-  const countryFlags = origins.length ? flagifyOriginList(origins).join('・') : '—';
+  const countryFlags = origins.length ? joinFlags(origins) : '—';
   const age = fmtAgingDays(bean, d?.brew_date);
   const { recTemp, recTime } = recommendForDrip({
     roast_level: d?.roast_level, derive: d?.derive, label20: d?.label20,
