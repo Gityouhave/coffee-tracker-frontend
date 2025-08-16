@@ -983,27 +983,39 @@ export function DripForm({API, beans, onSaved}:{API:string; beans:any[]; onSaved
       </div>
 
       {/* 入力群 */}
-      <div className="grid grid-cols-3 gap-2">
-        <div>
-          <input className="border rounded p-2 w-full" placeholder="挽き目 (1~17)" value={form.grind||''} onChange={e=>handle('grind',e.target.value)} />
-          <div className="text-xs text-gray-600 mt-1">
-            挽き目表記：<b>{(form.bean_id && form.grind) ? (derive?.grind?.label20 ?? '—') : '--'}</b>
-          </div>
-          <div className="text-[11px] text-gray-500 mt-1">
-            目安（焙煎度基準）：{ form.bean_id ? (
-              <>
-                粗 {derive?.grind?.markers_for_roast?.['粗'] ?? '—'} / 中粗 {derive?.grind?.markers_for_roast?.['中粗'] ?? '—'} / 中 {derive?.grind?.markers_for_roast?.['中'] ?? '—'} / 中細 {derive?.grind?.markers_for_roast?.['中細'] ?? '—'} / 細 {derive?.grind?.markers_for_roast?.['細'] ?? '—'} / 極細 {derive?.grind?.markers_for_roast?.['極細'] ?? '—'}
-              </>
-            ) : '--' }
-          </div>
-        </div>
+      {/* 挽き目 */}
+<div>
+  <div className="text-[11px] text-gray-500 mb-1">
+    目安（焙煎度基準）：{ form.bean_id ? (
+      <>粗 {derive?.grind?.markers_for_roast?.['粗'] ?? '—'} / 中粗 {derive?.grind?.markers_for_roast?.['中粗'] ?? '—'} / 中 {derive?.grind?.markers_for_roast?.['中'] ?? '—'} / 中細 {derive?.grind?.markers_for_roast?.['中細'] ?? '—'} / 細 {derive?.grind?.markers_for_roast?.['細'] ?? '—'} / 極細 {derive?.grind?.markers_for_roast?.['極細'] ?? '—'}</>
+    ) : '--' }
+  </div>
+
+  <input className="border rounded p-2 w-full" placeholder="挽き目 (1~17)" value={form.grind||''} onChange={e=>handle('grind',e.target.value)} />
+
+  <div className="text-xs text-gray-600 mt-1">
+    挽き目表記：<b>{(form.bean_id && form.grind) ? (derive?.grind?.label20 ?? '—') : '--'}</b>
+  </div>
+</div>
 
         <div>
-          <input className="border rounded p-2 w-full" placeholder="湯温 (℃)" value={form.water_temp_c||''} onChange={e=>handle('water_temp_c',e.target.value)} />
-          <div className="text-xs text-gray-600 mt-1">
-            推奨湯温：{showOrDash(!!form.bean_id, derive?.temp?.recommended_c)}℃（Δ { (form.bean_id && form.water_temp_c) ? (derive?.temp?.delta_from_input ?? '—') : '--' }）
-          </div>
-        </div>
+  {/* ↑ 推奨（上） */}
+  <div className="text-xs text-gray-600 mb-1">
+    推奨湯温：{showOrDash(!!form.bean_id, derive?.temp?.recommended_c)}℃
+  </div>
+
+  <input
+    className="border rounded p-2 w-full"
+    placeholder="湯温 (℃)"
+    value={form.water_temp_c||''}
+    onChange={e=>handle('water_temp_c',e.target.value)}
+  />
+
+  {/* ↓ 差分（下） */}
+  <div className="text-xs text-gray-600 mt-1">
+    Δ：{(form.bean_id && form.water_temp_c) ? (derive?.temp?.delta_from_input ?? '—') : '--'}
+  </div>
+</div>
 
         <div>
           <select className="border rounded p-2 w-full" value={form.dripper||''} onChange={e=>handle('dripper',e.target.value)}>
@@ -1014,46 +1026,72 @@ export function DripForm({API, beans, onSaved}:{API:string; beans:any[]; onSaved
         </div>
       </div>
 
-      <div className="grid grid-cols-3 gap-2">
-        <div>
-          <input className="border rounded p-2 w-full" placeholder="豆 (g)" value={form.dose_g||''} onChange={e=>handle('dose_g',e.target.value)} />
-          <div className="text-xs text-gray-600 mt-1">推奨レシオ：{showOrDash(!!form.bean_id, derive?.ratio?.recommended_ratio)}倍</div>
-          <div className="text-[11px] text-gray-500">最大推奨量：{showOrDash(!!form.bean_id, derive?.dose?.max_recommended_g)}</div>
-          <div className="text-[11px] text-gray-600 mt-1">
-            {(() => {
-              const b = beans.find(b => String(b.id) === String(form.bean_id));
-              const price = Number(b?.price_yen), weight = Number(b?.weight_g), dose = Number(form.dose_g);
-              if (!b || !Number.isFinite(price) || !Number.isFinite(weight) || !Number.isFinite(dose) || weight <= 0) return '費用：--';
-              const perG = Math.round((price / weight) * 100) / 100;
-              const cost = Math.round(perG * dose * 100) / 100;
-              return `費用：約 ${cost} 円（${perG} 円/g）`;
-            })()}
-          </div>
-        </div>
+      {/* 豆量 */}
+<div>
+  <div className="text-xs text-gray-600 mb-1">
+    推奨レシオ：{showOrDash(!!form.bean_id, derive?.ratio?.recommended_ratio)}倍
+  </div>
 
-        <div>
-          <input className="border rounded p-2 w-full" placeholder="湯量 (g)" value={form.water_g||''} onChange={e=>handle('water_g',e.target.value)} />
-          <div className="text-xs text-gray-600 mt-1">
-            推奨湯量：{ (form.bean_id && form.dose_g) ? (derive?.ratio?.recommended_water_g ?? '—') : '--' }g（Δ { (form.bean_id && form.dose_g && form.water_g) ? (derive?.ratio?.delta_from_input ?? '—') : '--' }）
-          </div>
-        </div>
+  <input className="border rounded p-2 w-full" placeholder="豆 (g)" value={form.dose_g||''} onChange={e=>handle('dose_g',e.target.value)} />
+
+  <div className="text-[11px] text-gray-500 mt-1">最大推奨量：{showOrDash(!!form.bean_id, derive?.dose?.max_recommended_g)}</div>
+  {/* 差分は無し（比率なので） */}
+</div>
+
+       <div>
+  {/* ↑ 推奨（上） */}
+  <div className="text-xs text-gray-600 mb-1">
+    推奨湯量：{ (form.bean_id && form.dose_g) ? (derive?.ratio?.recommended_water_g ?? '—') : '--' }g
+  </div>
+
+  <input
+    className="border rounded p-2 w-full"
+    placeholder="湯量 (g)"
+    value={form.water_g||''}
+    onChange={e=>handle('water_g',e.target.value)}
+  />
+
+  {/* ↓ 差分（下） */}
+  <div className="text-xs text-gray-600 mt-1">
+    Δ：{ (form.bean_id && form.dose_g && form.water_g) ? (derive?.ratio?.delta_from_input ?? '—') : '--' }
+  </div>
+</div>
 
         <input className="border rounded p-2" placeholder="落ちきり量 (g)" value={form.drawdown_g||''} onChange={e=>handle('drawdown_g',e.target.value)} />
       </div>
 
-      <div className="grid grid-cols-2 gap-2">
-        <div>
-          <input className="border rounded p-2 w-full" placeholder="抽出時間 (mm:ss)" value={form.time||''} onChange={e=>handle('time',e.target.value)} />
-          <div className="text-xs text-gray-600 mt-1">
-            推奨所要時間：{showOrDash(!!form.bean_id, formatSecFriendly(Number(derive?.time?.recommended_sec)))}
-          </div>
-        </div>
-        <select className="border rounded p-2" value={form.storage||''} onChange={e=>handle('storage',e.target.value)}>
-          <option value="">保存状態</option>
-          <option value="🧊冷凍">🧊冷凍</option>
-          <option value="常温">常温</option>
-        </select>
-      </div>
+     <div>
+  {/* ↑ 推奨（上） */}
+  <div className="text-xs text-gray-600 mb-1">
+    推奨所要時間：{showOrDash(!!form.bean_id, formatSecFriendly(Number(derive?.time?.recommended_sec)))}
+  </div>
+
+  <input
+    className="border rounded p-2 w-full"
+    placeholder="抽出時間 (mm:ss)"
+    value={form.time||''}
+    onChange={e=>handle('time',e.target.value)}
+  />
+
+  {/* ↓ 差分（下） */}
+  <div className="text-xs text-gray-600 mt-1">
+    Δ：{(() => {
+      const rec = Number(derive?.time?.recommended_sec);
+      const mmssToSec = (s?: string|null) => {
+        if (!s) return null;
+        const [mm, ss] = String(s).trim().split(':');
+        const m = Number(mm), s2 = Number(ss);
+        if (!Number.isFinite(m) || !Number.isFinite(s2)) return null;
+        return m * 60 + s2;
+      };
+      const act = mmssToSec(form.time as string | null);
+      if (!Number.isFinite(rec) || !Number.isFinite(act ?? NaN)) return '—';
+      const diff = Math.abs((act as number) - rec);
+      const mm = Math.floor(diff/60), ss = diff%60;
+      return `${String(mm).padStart(2,'0')}:${String(ss).padStart(2,'0')}`;
+    })()}
+  </div>
+</div>
 
       <textarea className="w-full border rounded p-2" placeholder="手法メモ" value={form.method_memo||''} onChange={e=>handle('method_memo',e.target.value)} />
       <textarea className="w-full border rounded p-2" placeholder="感想メモ" value={form.note_memo||''} onChange={e=>handle('note_memo',e.target.value)} />
