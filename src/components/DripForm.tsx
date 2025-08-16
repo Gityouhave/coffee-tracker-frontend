@@ -67,14 +67,16 @@ const RADAR_COLORS = {
   thisBeanBest:   { stroke: '#10b981', fill: '#10b98133' }, // 緑（その豆ベスト）
 };
 
-const TASTE_KEYS = [
-  { key:'sweetness',  label:'甘味' },
-  { key:'body',       label:'コク' },
-  { key:'aftertaste', label:'後味' },
-  { key:'clean',      label:'クリーンさ' },
-  { key:'flavor',     label:'風味' },
-  { key:'overall',    label:'総合' },
-] as const;
++const TASTE_KEYS = [
++  { key:'overall',    label:'総合' },
++  { key:'clean',      label:'クリーンさ' },
++  { key:'flavor',     label:'風味' },
++  { key:'acidity',    label:'酸味' },
++  { key:'bitterness', label:'苦味' },
++  { key:'sweetness',  label:'甘味' },
++  { key:'body',       label:'コク' },
++  { key:'aftertaste', label:'後味' },
++] as const;
 // 評価8項目（保存は 1–10 の既存ルール）
 const RATING_KEYS = [
   'overall','clean','flavor','acidity','bitterness','sweetness','body','aftertaste',
@@ -227,7 +229,7 @@ const [dripDate, setDripDate] = useState<string>(
 )
   const [beanDrips, setBeanDrips] = useState<any[]>([])
   const [allDrips, setAllDrips] = useState<any[]>([])
-  const [radarData, setRadarData] = useState<any[]>([])
+  
   // BEGIN: new states
 const [bestMetric, setBestMetric] = useState<TasteKey>('overall');
   // 味評価の適用トグル（デフォルト：全部ON）
@@ -492,14 +494,6 @@ setSelectedPatternId(pats[0]?.id || '');
       // レーダー：横並び比較（この豆平均 / 同焙煎度ベスト / 同産地×近焙煎度ベスト）
       const srRatings = bestSR?.ratings || {}
       const onRatings = bestON?.ratings || {}
-      const rd = radarKeys.map(k=> ({
-        subject: k.label,
-        beanAvg: Number(beanAvgMap[k.key] ?? 0),
-        sameRoastBest: Number(srRatings?.[k.key] ?? 0),
-        originNearBest: Number(onRatings?.[k.key] ?? 0),
-      }))
-      
-      setRadarData(rd)
     })()
   },[form.bean_id, API, beans, bestMetric])
 const getBest = (scope: ScopeKey, metric: TasteKey) => {
@@ -652,7 +646,12 @@ const RatingSelect = ({
   const hasStats     = !!(beanStats && Number(beanStats.count) > 0)
   const hasAvg       = !!(hasStats && beanStats.avg_overall != null)
   const hasByMethod  = !!(hasStats && Array.isArray(beanStats.by_method) && beanStats.by_method.length > 0)
-  const hasRadar     = !!(Array.isArray(radarData) && radarData.some(d => (d.beanAvg||d.sameRoastBest||d.originNearBest) > 0))
++  const hasRadar = useMemo(()=>{
++    const s = bestByScopeMetric
++    const hasAvg = !!Object.keys(beanAvgRatings||{}).length
++    const anyBest = !!(s?.thisBean?.[bestMetric] || s?.sameRoast?.[bestMetric] || s?.originNear?.[bestMetric])
++    return hasAvg && anyBest
++  }, [beanAvgRatings, bestByScopeMetric, bestMetric])
   const hasPairsTemp = (beanPairsTemp.length > 0)
   const hasPairsTime = (beanPairsTime.length > 0)
 
