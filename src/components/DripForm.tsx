@@ -134,6 +134,80 @@ const metricJp = (k: TasteKey)=> (
 
 /** 改行フォーマットのラベル */
 const makeMultilineLabel = (d:any, bean:any, title:string, metric?:TasteKey)=>{
+  // === Dripper recommendation helpers (TOP5) ===
+const purposeDict:Record<string,string> = {
+  'ハリオ':'クリアで酸を活かす',
+  'フラワー':'華やかな香りを引き出す',
+  'カリタウェーブ':'バランス型、均一抽出',
+  'コーノ':'柔らかい質感と甘み',
+  'クレバー':'甘みとボディを強調',
+  'ハリオスイッチ':'透過と浸漬の中間',
+  'ネル':'コクと深みを増す',
+  'フレンチプレス':'オイル感と重厚な口当たり',
+  'エアロプレス':'可変性高く実験的',
+  '水出し':'まろやか＆低酸味',
+  'サイフォン':'香りと透明感',
+  'モカポット':'濃厚・エスプレッソ風',
+  'エスプレッソ':'凝縮感・厚み'
+};
+
+/** 推奨ドリッパーTOP5（実績 > ルール） */
+const pickRecommendedDrippers = (args:{
+  bean?: any,
+  beanStats?: any|null
+}): {name:string; purpose:string}[] =>{
+  const { bean, beanStats } = args || {};
+  const roast = String(bean?.roast_level||'');
+  const process = String(bean?.process||'');
+  const addl = String(bean?.addl_process||'');
+  const origin = String(bean?.origin||'');
+
+  // 1) 実績ベース（by_methodのavg_overall降順）
+  const byMethod = Array.isArray(beanStats?.by_method) ? beanStats.by_method as Array<{dripper:string; avg_overall:number}> : [];
+  const bestByData = byMethod
+    .filter(x=> typeof x?.avg_overall==='number' && x?.dripper)
+    .sort((a,b)=> (b.avg_overall - a.avg_overall));
+  if (bestByData.length>0) {
+    return bestByData.slice(0,5).map(x=>({
+      name: x.dripper,
+      purpose: purposeDict[x.dripper] ?? '—'
+    }));
+  }
+
+  // 2) ルールベース
+  const p = (process + ' ' + addl).toLowerCase();
+  const isFerment = /(anaer|carbonic|酵素|発酵|macera|yeast)/i.test(p);
+  const isNatural = /(natural|ナチュラル)/i.test(p);
+  const isHoney   = /(honey|ハニー)/i.test(p);
+  const isWashed  = /(wash|ウォッシュ)/i.test(p);
+  const light = /(ライト|シナモン|ミディアム|ハイ)/.test(roast);
+  const dark  = /(フルシティ|フレンチ|イタリアン)/.test(roast);
+
+  const cands:string[] = [];
+  const pushUnique = (arr:string[], ...xs:string[])=>{
+    xs.forEach(x=>{ if(x && !arr.includes(x)) arr.push(x); });
+    return arr;
+  };
+
+  if (isFerment) pushUnique(cands, 'クレバー','ハリオスイッチ','フレンチプレス','ネル');
+  if (isNatural) pushUnique(cands, 'クレバー','ハリオスイッチ','カリタウェーブ','ハリオ','フラワー');
+  if (isHoney)   pushUnique(cands, 'ハリオ','カリタウェーブ','フラワー','クレバー');
+  if (isWashed)  pushUnique(cands, 'ハリオ','フラワー','カリタウェーブ','コーノ');
+
+  if (light) pushUnique(cands, 'ハリオ','フラワー','カリタウェーブ','コーノ');
+  if (dark)  pushUnique(cands, 'ネル','フレンチプレス','クレバー','ハリオスイッチ');
+
+  if (/(エチオピア|ケニア|ルワンダ|ブルンジ|コロンビア|グアテマラ)/.test(origin)) {
+    pushUnique(cands, 'フラワー','ハリオ','カリタウェーブ');
+  }
+
+  if (cands.length===0) pushUnique(cands, 'ハリオ','カリタウェーブ','クレバー');
+
+  return cands.slice(0,5).map(x=>({
+    name: x,
+    purpose: purposeDict[x] ?? '—'
+  }));
+};
   const origins = bean?.origin ? splitOrigins(String(bean.origin)) : [];
   const flags = origins.length ? joinFlags(origins) : '—';
   const age = fmtAgingDays(bean, d?.brew_date);
@@ -541,6 +615,12 @@ export function DripForm({API, beans, onSaved}:{API:string; beans:any[]; onSaved
 
   // 表示ヘルパ
   const selBean = beans.find(b=> String(b.id)===String(form.bean_id))
+
+  // 推奨ドリッパーTOP5（実績→ルール）
+  const recommendedDrippers = useMemo(()=>(
+    pickRecommendedDrippers({ bean: selBean, beanStats })
+  ), [selBean, beanStats]);
+  
   const showOrDash = (cond:any, val:any, dashWhenBean?:string)=> cond ? (val ?? '—') : (dashWhenBean ?? '--')
   const isUnknown = (v?: any) => {
     const s = String(v ?? '').trim()
@@ -1027,6 +1107,30 @@ export function DripForm({API, beans, onSaved}:{API:string; beans:any[]; onSaved
 
         {/* ドリッパー */}
         <div>
+                    <div className="text-xs text-gray-600 mt-2">
+            推奨ドリッパーTOP5：
+            <ul className="list-disc list-inside">
+              {recommendedDrippers.length > 0 ? (
+                recommendedDrippers.map((d,i)=>(
+                  <li key={i} className="my-0.5">
+                    <b>{d.name}</b> — {d.purpose}
+                    {/* 1位はワンタッチ適用ボタン */}
+                    {i===0 && (
+                      <button
+                        type="button"
+                        className="ml-2 px-2 py-0.5 rounded border bg-white hover:bg-gray-50"
+                        onClick={()=> handle('dripper', d.name)}
+                      >
+                        適用
+                      </button>
+                    )}
+                  </li>
+                ))
+              ) : (
+                <li>—</li>
+              )}
+            </ul>
+          </div>
           <select
             className="border rounded p-2 w-full"
             value={form.dripper||''}
