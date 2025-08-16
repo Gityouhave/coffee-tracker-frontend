@@ -155,8 +155,11 @@ const makeMultilineLabel = (d:any, bean:any, title:string, metric?:TasteKey)=>{
   const line3 = metric ? `〈${metricJp(metric)}〉${Number(d?.ratings?.[metric])||'—'}` : '';
   return [line1, line2, line3].filter(Boolean).join('\n');
 };
-// === Dripper recommendation helpers (TOP5) ===
-const purposeDict:Record<string,string> = {
+
+
+ // === Dripper recommendation (TOP5) ===
+// コンポーネントの外（ファイル先頭付近）に置く
+const purposeDict: Record<string, string> = {
   'ハリオ':'クリアで酸を活かす',
   'フラワー':'華やかな香りを引き出す',
   'カリタウェーブ':'バランス型、均一抽出',
@@ -169,32 +172,42 @@ const purposeDict:Record<string,string> = {
   '水出し':'まろやか＆低酸味',
   'サイフォン':'香りと透明感',
   'モカポット':'濃厚・エスプレッソ風',
-  'エスプレッソ':'凝縮感・厚み'
+  'エスプレッソ':'凝縮感・厚み',
+  'クリスタル':'高い透明感',
+  'ブルーボトル':'やや早流速・整った味',
+  'フィン':'しっかり抽出'
 };
 
-const pickRecommendedDrippers = (args:{
-  bean?: any,
-  beanStats?: any|null
-}): {name:string; purpose:string}[] =>{
+type DripPick = { name: string; purpose: string };
+
+export function pickRecommendedDrippers(args: {
+  bean?: any;
+  beanStats?: any | null;
+}): DripPick[] {
   const { bean, beanStats } = args || {};
-  const roast = String(bean?.roast_level||'');
-  const process = String(bean?.process||'');
-  const addl = String(bean?.addl_process||'');
-  const origin = String(bean?.origin||'');
+  const roast = String(bean?.roast_level || '');
+  const process = String(bean?.process || '');
+  const addl = String(bean?.addl_process || '');
+  const origin = String(bean?.origin || '');
 
-  // 1) 実績ベース
-  const byMethod = Array.isArray(beanStats?.by_method) ? beanStats.by_method as Array<{dripper:string; avg_overall:number}> : [];
-  const bestByData = byMethod
-    .filter(x=> typeof x?.avg_overall==='number' && x?.dripper)
-    .sort((a,b)=> (b.avg_overall - a.avg_overall));
-  if (bestByData.length>0) {
-    return bestByData.slice(0,5).map(x=>({
+  // 1) 実績ベース（avg_overall降順、countがあれば僅かに加点）
+  const empiricalNames: string[] = [];
+  const byMethod = Array.isArray(beanStats?.by_method)
+    ? (beanStats.by_method as Array<{ dripper: string; avg_overall: number; count?: number }>)
+    : [];
+
+  const empiricalSorted = byMethod
+    .filter(x => x?.dripper && Number.isFinite(x?.avg_overall))
+    .map(x => ({
       name: x.dripper,
-      purpose: purposeDict[x.dripper] ?? '—'
-    }));
-  }
+      score: Number(x.avg_overall) + (Number(x.count || 0) * 0.01) // 同点時に微差を付ける
+    }))
+    .sort((a, b) => b.score - a.score)
+    .map(x => x.name);
 
-  // 2) ルールベース
+  empiricalNames.push(...empiricalSorted);
+
+  // 2) ルールベース候補（優先順）
   const p = (process + ' ' + addl).toLowerCase();
   const isFerment = /(anaer|carbonic|酵素|発酵|macera|yeast)/i.test(p);
   const isNatural = /(natural|ナチュラル)/i.test(p);
@@ -203,11 +216,39 @@ const pickRecommendedDrippers = (args:{
   const light = /(ライト|シナモン|ミディアム|ハイ)/.test(roast);
   const dark  = /(フルシティ|フレンチ|イタリアン)/.test(roast);
 
-  const cands:string[] = [];
-  const pushUnique = (arr:string[], ...xs:string[])=>{
-    xs.forEach(x=>{ if(x && !arr.includes(x)) arr.push(x); });
-    return arr;
+  const ruleCands: string[] = [];
+  const pushUnique = (arr: string[], ...xs: string[]) => {
+    xs.forEach(x => { if (x && !arr.includes(x)) arr.push(x); });
   };
+
+  if (isFerment) pushUnique(ruleCands, 'クレバー','ハリオスイッチ','フレンチプレス','ネル');
+  if (isNatural) pushUnique(ruleCands, 'クレバー','ハリオスイッチ','カリタウェーブ','ハリオ','フラワー');
+  if (isHoney)   pushUnique(ruleCands, 'ハリオ','カリタウェーブ','フラワー','クレバー');
+  if (isWashed)  pushUnique(ruleCands, 'ハリオ','フラワー','カリタウェーブ','コーノ');
+
+  if (light) pushUnique(ruleCands, 'ハリオ','フラワー','カリタウェーブ','コーノ');
+  if (dark)  pushUnique(ruleCands, 'ネル','フレンチプレス','クレバー','ハリオスイッチ');
+
+  if (/(エチオピア|ケニア|ルワンダ|ブルンジ|コロンビア|グアテマラ)/.test(origin)) {
+    pushUnique(ruleCands, 'フラワー','ハリオ','カリタウェーブ');
+  }
+
+  // 3) マージ（実績を優先→ルールで補完→デフォルトで埋める）
+  const defaults = ['ハリオ','カリタウェーブ','クレバー','フラワー','ネル'];
+  const merged: string[] = [];
+
+  const add = (name: string) => { if (name && !merged.includes(name)) merged.push(name); };
+
+  empiricalNames.forEach(add);
+  ruleCands.forEach(add);
+  defaults.forEach(add);
+
+  // 最大5件に整理して返す
+  return merged.slice(0, 5).map(name => ({
+    name,
+    purpose: purposeDict[name] ?? '—'
+  }));
+}
 
   if (isFerment) pushUnique(cands, 'クレバー','ハリオスイッチ','フレンチプレス','ネル');
   if (isNatural) pushUnique(cands, 'クレバー','ハリオスイッチ','カリタウェーブ','ハリオ','フラワー');
@@ -616,9 +657,10 @@ export function DripForm({API, beans, onSaved}:{API:string; beans:any[]; onSaved
   const selBean = beans.find(b=> String(b.id)===String(form.bean_id))
 
   // 推奨ドリッパーTOP5（実績→ルール）
-  const recommendedDrippers = useMemo(()=>(
-    pickRecommendedDrippers({ bean: selBean, beanStats })
-  ), [selBean, beanStats]);
+  const recommendedDrippers = useMemo(
+  () => pickRecommendedDrippers({ bean: selBean, beanStats }),
+  [selBean, beanStats?.by_method] // ← 追加
+);
   
   const showOrDash = (cond:any, val:any, dashWhenBean?:string)=> cond ? (val ?? '—') : (dashWhenBean ?? '--')
   const isUnknown = (v?: any) => {
