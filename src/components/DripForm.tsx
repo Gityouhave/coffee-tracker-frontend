@@ -900,6 +900,7 @@ export function DripForm({API, beans, onSaved}:{API:string; beans:any[]; onSaved
               );
             })}
           </div>
+          </div>
       )}
 
         {/* 豆ごとバー（抽出方法別平均） */}
