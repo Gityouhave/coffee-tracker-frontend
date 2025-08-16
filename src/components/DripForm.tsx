@@ -440,18 +440,6 @@ const applyFromDrip = (d:any) => {
       setBestSameRoast(bestSR)
       setBestOriginNear(bestON)
 
-      // パターン（適用用）
-      const mkFields = (d:any)=> d ? ({
-        grind: d.grind,
-        water_temp_c: d.water_temp_c,
-        dose_g: d.dose_g,
-        water_g: d.water_g,
-        drawdown_g: d.drawdown_g ?? null,
-        time: secToMMSS(d.time_sec),
-        dripper: d.dripper ?? null,
-        storage: d.storage ?? null,
-      }) : {}
-
       // 3スコープの “各指標ベスト” を構築
 const bestOf = (arr:any[], metric:TasteKey) =>
   arr
@@ -502,24 +490,7 @@ setSelectedPatternId(pats[0]?.id || '');
         sameRoastBest: Number(srRatings?.[k.key] ?? 0),
         originNearBest: Number(onRatings?.[k.key] ?? 0),
       }))
-      // BEGIN: bestByScopeMetric build
-const bestOf = (arr:any[], metric:TasteKey) =>
-  arr
-    .filter(d => Number.isFinite(Number(d?.ratings?.[metric])))
-    .sort((a,b)=> Number(b.ratings[metric]) - Number(a.ratings[metric])
-                 || (new Date(b.brew_date).getTime() - new Date(a.brew_date).getTime()))[0] || null;
-
-const bestMap: Record<ScopeKey, Partial<Record<TasteKey, any>>> = {
-  thisBean: {}, sameRoast: {}, originNear: {}
-}
-for (const t of TASTE_KEYS.map(t=>t.key as TasteKey)) {
-  bestMap.thisBean[t]   = bestOf(mine, t)
-  bestMap.sameRoast[t]  = bestOf(sameRoastCandidates, t)
-  bestMap.originNear[t] = bestOf(originNearCandidates, t)
-}
-setBestByScopeMetric(bestMap)
-setBeanAvgRatings(beanAvgMap) // ← この useEffect 内で作った平均を state に出しておく
-// END: bestByScopeMetric build
+      
       setRadarData(rd)
     })()
   },[form.bean_id, API, beans, bestMetric])
