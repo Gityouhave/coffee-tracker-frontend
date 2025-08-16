@@ -66,21 +66,12 @@ export function filterSortBeans(
 
   return list.sort(cmp)
 }
+import { flagifyOriginList } from './flags';
 
-// 「番号付き焙煎度／豆名（産地｜品種｜精製｜追加）／焙煎日」
-export function beanOptionLabel(b:any){
-  const head = `${ROAST_SYMBOLS[b.roast_level] || ''}${b.roast_level || ''}／${b.name || ''}`
-  const parts:string[] = []
-  const add = (v?: string|null) => {
-    const s = String(v||'').trim()
-    if (!s || s==='不明') return
-    parts.push(s)
-  }
-  add(b.origin)
-  add(b.variety)
-  add(b.process)
-  add(b.addl_process)
-  const mid = parts.length ? `（${parts.join('｜')}）` : ''
-  const tail = b.roast_date ? `／${b.roast_date}` : ''
-  return `${head}${mid}${tail}`
+export function beanOptionLabel(b: any) {
+  const name = b?.name ?? '—';
+  const origin = flagifyOriginList(b?.origin); // ★国旗付き
+  const roast = b?.roast_level ?? '—';
+  const date  = b?.roast_date || b?.roasted_on || b?.purchase_date || b?.purchased_on || '—';
+  return `${name}（${origin}｜${roast}｜${date}）`;
 }
