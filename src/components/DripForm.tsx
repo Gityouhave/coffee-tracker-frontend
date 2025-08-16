@@ -952,7 +952,15 @@ export function DripForm({API, beans, onSaved}:{API:string; beans:any[]; onSaved
                 </div>
 
                 <ChartFrame aspect={1}>
-  <RadarChart data={[ /* ... */ ]}>
+  <RadarChart data={[
+    {subject:'クリーンさ',  value:Number(last?.ratings?.clean)||0},
+    {subject:'風味',        value:Number(last?.ratings?.flavor)||0},
+    {subject:'酸味',        value:Number(last?.ratings?.acidity)||0},
+    {subject:'苦味',        value:Number(last?.ratings?.bitterness)||0},
+    {subject:'甘味',        value:Number(last?.ratings?.sweetness)||0},
+    {subject:'コク',        value:Number(last?.ratings?.body)||0},
+    {subject:'後味',        value:Number(last?.ratings?.aftertaste)||0},
+  ]}>
     <PolarGrid />
     <PolarAngleAxis dataKey="subject" />
     <PolarRadiusAxis angle={30} domain={[0,10]} />
@@ -976,16 +984,15 @@ export function DripForm({API, beans, onSaved}:{API:string; beans:any[]; onSaved
                 <div className="text-sm font-semibold">平均（{metricJp(bestMetric)}）</div>
                 
                 <ChartFrame aspect={1}>
-  <RadarChart data={[ /* ... */ ]}>
-    <PolarGrid />
-    <PolarAngleAxis dataKey="subject" />
-    <PolarRadiusAxis angle={30} domain={[0,10]} />
-    <Radar name="平均" dataKey="value"
-      stroke={RADAR_COLORS.beanAvg.stroke} fill={RADAR_COLORS.beanAvg.fill} fillOpacity={0.35} />
-    <Tooltip />
-  </RadarChart>
-</ChartFrame><ChartFrame aspect={1}>
-  <RadarChart data={[ /* ... */ ]}>
+  <RadarChart data={[
+    {subject:'クリーンさ',  value:Number(beanAvgRatings.clean)||0},
+    {subject:'風味',        value:Number(beanAvgRatings.flavor)||0},
+    {subject:'酸味',        value:Number(beanAvgRatings.acidity)||0},
+    {subject:'苦味',        value:Number(beanAvgRatings.bitterness)||0},
+    {subject:'甘味',        value:Number(beanAvgRatings.sweetness)||0},
+    {subject:'コク',        value:Number(beanAvgRatings.body)||0},
+    {subject:'後味',        value:Number(beanAvgRatings.aftertaste)||0},
+  ]}>
     <PolarGrid />
     <PolarAngleAxis dataKey="subject" />
     <PolarRadiusAxis angle={30} domain={[0,10]} />
