@@ -67,6 +67,7 @@ const fmtAgingDays = (bean:any, brew_date?:string)=>{
 
 const RADAR_COLORS = {
   beanAvg:        { stroke: '#111827', fill: '#11182733' }, // 黒（平均）
+  last:           { stroke: '#8b5cf6', fill: '#8b5cf633' }, // 紫（前回）
   sameRoastBest:  { stroke: '#ef4444', fill: '#ef444433' }, // 赤（同焙煎度ベスト）
   originNearBest: { stroke: '#3b82f6', fill: '#3b82f633' }, // 青（産地×近焙煎度ベスト）
   thisBeanBest:   { stroke: '#10b981', fill: '#10b98133' }, // 緑（その豆ベスト）
@@ -722,15 +723,18 @@ export function DripForm({API, beans, onSaved}:{API:string; beans:any[]; onSaved
   const hasStats     = !!(beanStats && Number(beanStats.count) > 0)
   const hasAvg       = !!(hasStats && beanStats.avg_overall != null)
   const hasByMethod  = !!(hasStats && Array.isArray(beanStats.by_method) && beanStats.by_method.length > 0)
-  const hasRadar = useMemo(() => {
-  const hasAvg = Object.keys(beanAvgRatings || {}).length > 0;
-  const s = bestByScopeMetric;
-  const anyBest = !!(s?.thisBean?.[bestMetric] || s?.sameRoast?.[bestMetric] || s?.originNear?.[bestMetric]);
-  return hasAvg && anyBest;
-}, [beanAvgRatings, bestByScopeMetric, bestMetric]);
+
   const hasPairsTemp = (beanPairsTemp.length > 0)
   const hasPairsTime = (beanPairsTime.length > 0)
-
++  const hasRadar = useMemo(() => {
++    const hasAvgMap = Object.keys(beanAvgRatings || {}).length > 0;
++    const anyBest =
++      !!(bestByScopeMetric?.thisBean?.[bestMetric] ||
++         bestByScopeMetric?.sameRoast?.[bestMetric] ||
++         bestByScopeMetric?.originNear?.[bestMetric]);
++    const hasLast = !!last;
++    return hasAvgMap || anyBest || hasLast;
++  }, [beanAvgRatings, bestByScopeMetric, bestMetric, last]);
   return (
     <form onSubmit={submit} className="space-y-4">
       {/* ソート・絞り込み */}
@@ -789,74 +793,7 @@ export function DripForm({API, beans, onSaved}:{API:string; beans:any[]; onSaved
         />
       </div>
 
-      {(last || bestPatterns.length>0) && (
-        <div className="text-xs flex flex-col gap-2 sm:flex-row sm:items-start sm:gap-3">
-          {last && (
-            <div className="flex items-start gap-2">
-              <div className="whitespace-pre-wrap leading-5">
-                {makeMultilineLabel(last, selBean, '前回', bestMetric)}
-              </div>
-              <button
-                type="button"
-                onClick={applyLast}
-                className="px-2 py-1 rounded border bg-white hover:bg-gray-50 h-fit"
-              >
-                前回値を適用
-              </button>
-            </div>
-          )}
-
-          {bestPatterns.length>0 && (
-            <div className="flex flex-col gap-1">
-              <div className="flex items-center gap-2">
-                <label className="text-gray-600">暫定最適の指標：</label>
-                <select className="border rounded p-1"
-                        value={bestMetric}
-                        onChange={e=>setBestMetric(e.target.value as TasteKey)}>
-                  {(['overall','clean','flavor','acidity','bitterness','sweetness','body','aftertaste'] as TasteKey[])
-                    .map(k=> <option key={k} value={k}>{metricJp(k)}</option>)}
-                </select>
-
-                <label className="ml-2 text-gray-600">対象：</label>
-                <select className="border rounded p-1"
-                        value={selectedPatternId}
-                        onChange={e=>setSelectedPatternId(e.target.value as any)}>
-                  {bestPatterns.map(p=>(
-                    <option key={p.id} value={p.id}>
-                      {p.id==='thisBean'?'同豆ベスト':p.id==='sameRoast'?'同焙煎度ベスト':'産地×近焙煎度ベスト'}
-                    </option>
-                  ))}
-                </select>
-
-                <button
-                  type="button"
-                  onClick={applyBest}
-                  className="px-2 py-1 rounded border bg-white hover:bg-gray-50"
-                >
-                  暫定最適値を適用
-                </button>
-              </div>
-
-              {/* 選択中の暫定最適の詳細（改行表示） */}
-              <div className="whitespace-pre-wrap leading-5 border rounded p-2 bg-white">
-                {(() => {
-                  const src = bestPatterns.find(p=>p.id===selectedPatternId) || bestPatterns[0];
-                  if(!src) return '—';
-                  const d = src.id==='thisBean'
-                    ? bestByScopeMetric?.thisBean?.[bestMetric]
-                    : src.id==='sameRoast'
-                      ? bestByScopeMetric?.sameRoast?.[bestMetric]
-                      : bestByScopeMetric?.originNear?.[bestMetric];
-                  const bean = d ? beans.find(b=> String(b.id)===String(d.bean_id)) : null;
-                  return d && bean ? makeMultilineLabel(d, bean, 
-                    src.id==='thisBean'?'同豆ベスト':src.id==='sameRoast'?'同焙煎度ベスト':'産地×近焙煎度ベスト',
-                    bestMetric) : '—';
-                })()}
-              </div>
-            </div>
-          )}
-        </div>
-      )}
+     
 
       {/* エイジング日数 */}
       <div className="text-xs text-gray-700">
@@ -926,7 +863,7 @@ export function DripForm({API, beans, onSaved}:{API:string; beans:any[]; onSaved
             </select>
           </div>
 
-          <div className="grid gap-3 md:grid-cols-3">
+         <div className="grid gap-3 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5">
             {(['thisBean','sameRoast','originNear'] as ScopeKey[]).map(scope => {
               const d = bestByScopeMetric?.[scope]?.[bestMetric];
               const title = scopeTitle(scope);
@@ -989,6 +926,80 @@ export function DripForm({API, beans, onSaved}:{API:string; beans:any[]; onSaved
           </div>
           </div>
       )}
+
+        {/* 追加：前回 */}
++            {last ? (
++              <div className="border rounded bg-white p-3 flex flex-col gap-2" key="last">
++                <div className="flex items-center justify-between">
++                  <div className="text-sm font-semibold">前回（{metricJp(bestMetric)}）</div>
++                  <button
++                    type="button"
++                    onClick={()=> applyFromDrip(last)}
++                    className="px-2 py-1 rounded border bg-white hover:bg-gray-50 text-xs"
++                  >
++                    この値を適用
++                  </button>
++                </div>
++                <div className="h-56">
++                  <ResponsiveContainer>
++                    <RadarChart data={[
++                      {subject:'クリーンさ',  value:Number(last?.ratings?.clean)||0},
++                      {subject:'風味',        value:Number(last?.ratings?.flavor)||0},
++                      {subject:'酸味',        value:Number(last?.ratings?.acidity)||0},
++                      {subject:'苦味',        value:Number(last?.ratings?.bitterness)||0},
++                      {subject:'甘味',        value:Number(last?.ratings?.sweetness)||0},
++                      {subject:'コク',        value:Number(last?.ratings?.body)||0},
++                      {subject:'後味',        value:Number(last?.ratings?.aftertaste)||0},
++                    ]}>
++                      <PolarGrid />
++                      <PolarAngleAxis dataKey="subject" />
++                      <PolarRadiusAxis angle={30} domain={[0,10]} />
++                      <Radar name="前回" dataKey="value"
++                        stroke={RADAR_COLORS.last.stroke} fill={RADAR_COLORS.last.fill} fillOpacity={0.35} />
++                      <Tooltip />
++                    </RadarChart>
++                  </ResponsiveContainer>
++                </div>
++                <div className="text-xs whitespace-pre-wrap leading-5">
++                  {selBean ? makeMultilineLabel(last, selBean, '前回', bestMetric) : '—'}
++                </div>
++              </div>
++            ) : (
++              <div className="border rounded p-3 bg-white text-xs text-gray-500" key="last-empty">前回：データなし</div>
++            )}
++
++            {/* 追加：平均 */}
++            {Object.keys(beanAvgRatings||{}).length ? (
++              <div className="border rounded bg-white p-3 flex flex-col gap-2" key="avg">
++                <div className="text-sm font-semibold">平均（{metricJp(bestMetric)}）</div>
++                <div className="h-56">
++                  <ResponsiveContainer>
++                    <RadarChart data={[
++                      {subject:'クリーンさ',  value:Number(beanAvgRatings.clean)||0},
++                      {subject:'風味',        value:Number(beanAvgRatings.flavor)||0},
++                      {subject:'酸味',        value:Number(beanAvgRatings.acidity)||0},
++                      {subject:'苦味',        value:Number(beanAvgRatings.bitterness)||0},
++                      {subject:'甘味',        value:Number(beanAvgRatings.sweetness)||0},
++                      {subject:'コク',        value:Number(beanAvgRatings.body)||0},
++                      {subject:'後味',        value:Number(beanAvgRatings.aftertaste)||0},
++                    ]}>
++                      <PolarGrid />
++                      <PolarAngleAxis dataKey="subject" />
++                      <PolarRadiusAxis angle={30} domain={[0,10]} />
++                      <Radar name="平均" dataKey="value"
++                        stroke={RADAR_COLORS.beanAvg.stroke} fill={RADAR_COLORS.beanAvg.fill} fillOpacity={0.35} />
++                      <Tooltip />
++                    </RadarChart>
++                  </ResponsiveContainer>
++                </div>
++                <div className="text-xs text-gray-500">
++                  直近の同豆ドリップ平均（7項目）
++                </div>
++              </div>
++            ) : (
++              <div className="border rounded p-3 bg-white text-xs text-gray-500" key="avg-empty">平均：データなし</div>
++            )}
+           </div>
 
         {/* 豆ごとバー（抽出方法別平均） */}
         {hasStats && (
