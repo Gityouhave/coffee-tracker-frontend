@@ -67,16 +67,16 @@ const RADAR_COLORS = {
   thisBeanBest:   { stroke: '#10b981', fill: '#10b98133' }, // 緑（その豆ベスト）
 };
 
-+const TASTE_KEYS = [
-+  { key:'overall',    label:'総合' },
-+  { key:'clean',      label:'クリーンさ' },
-+  { key:'flavor',     label:'風味' },
-+  { key:'acidity',    label:'酸味' },
-+  { key:'bitterness', label:'苦味' },
-+  { key:'sweetness',  label:'甘味' },
-+  { key:'body',       label:'コク' },
-+  { key:'aftertaste', label:'後味' },
-+] as const;
+const TASTE_KEYS = [
+  { key:'overall',    label:'総合' },
+  { key:'clean',      label:'クリーンさ' },
+  { key:'flavor',     label:'風味' },
+  { key:'acidity',    label:'酸味' },
+  { key:'bitterness', label:'苦味' },
+  { key:'sweetness',  label:'甘味' },
+  { key:'body',       label:'コク' },
+  { key:'aftertaste', label:'後味' },
+] as const;
 // 評価8項目（保存は 1–10 の既存ルール）
 const RATING_KEYS = [
   'overall','clean','flavor','acidity','bitterness','sweetness','body','aftertaste',
