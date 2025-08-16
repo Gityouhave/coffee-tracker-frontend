@@ -1040,14 +1040,13 @@ const toggleChart = (k: RadarItemKey) =>
             記録数：{beanStats.count}　平均：{beanStats.avg_overall}　最高：{beanStats.max_overall}
           </div>
         )}
-        {hasByMethod && showSection.byMethod && (
-         <ChartFrame aspect={4/3}>
-  <BarChart data={beanStats.by_method} margin={{ top: 8, right: 16, bottom: 8, left: 0 }}>
+{hasByMethod && showSection.byMethod && (
+  <ChartFrame aspect={2.4} className="max-h-[180px]">
+    <BarChart data={beanStats.by_method} margin={{ top: 4, right: 8, bottom: 4, left: 0 }} barSize={14}>  
     <CartesianGrid strokeDasharray="3 3" />
-    <XAxis dataKey="dripper" tick={{ fontSize: 12 }} />
-    <YAxis tick={{ fontSize: 12 }} />
+      <XAxis dataKey="dripper" tick={{ fontSize: 10 }} />
+      <YAxis tick={{ fontSize: 10 }} />
     <Tooltip />
-    <Legend />
     <Bar dataKey="avg_overall" />
   </BarChart>
 </ChartFrame>
@@ -1064,21 +1063,21 @@ const toggleChart = (k: RadarItemKey) =>
           </select>
         </div>
 
-        {/* 湯温差 vs 指標 */}
-        <div>
+  {/* 湯温差/時間差 グリッド配置 */}
+ <div className="grid md:grid-cols-2 gap-2">
           {hasPairsTemp && showSection.corrTemp && (
             <div>
               <div className="font-semibold mb-1">
                 湯温差（実測−推奨） vs {yAccessor.label}
                 <span className="ml-2 text-xs text-gray-500">r={rTempBean ?? '—'}</span>
               </div>
-              <ChartFrame aspect={4/3}>
-  <ScatterChart margin={{ top: 8, right: 16, bottom: 8, left: 0 }}>
+ <ChartFrame aspect={2.4} className="max-h-[180px]">
+   <ScatterChart margin={{ top: 4, right: 8, bottom: 4, left: 0 }}>
     <CartesianGrid />
-    <XAxis dataKey="_deltas.temp_delta" name="tempΔ(°C)" tick={{ fontSize: 12 }} />
-    <YAxis dataKey={yAccessor.key} name={yAccessor.label} tick={{ fontSize: 12 }} />
+    <XAxis dataKey="_deltas.temp_delta" name="tempΔ(°C)" tick={{ fontSize: 10 }} />
+     <YAxis dataKey={yAccessor.key} name={yAccessor.label} tick={{ fontSize: 10 }} />
     <Tooltip />
-    <Scatter name="drips" data={beanDrips} />
+<Scatter name="drips" data={beanDrips} shape="circle" r={2} />
   </ScatterChart>
 </ChartFrame>
             </div>
@@ -1094,13 +1093,13 @@ const toggleChart = (k: RadarItemKey) =>
                 <span className="ml-2 text-xs text-gray-500">r={rTimeBean ?? '—'}</span>
               </div>
               
-              <ChartFrame aspect={4/3}>
-  <ScatterChart margin={{ top: 8, right: 16, bottom: 8, left: 0 }}>
+              <ChartFrame aspect={2.4} className="max-h-[180px]">
+   <ScatterChart margin={{ top: 4, right: 8, bottom: 4, left: 0 }}>
     <CartesianGrid />
-    <XAxis dataKey="_deltas.time_delta" name="timeΔ(s)" tick={{ fontSize: 12 }} />
-    <YAxis dataKey={yAccessor.key} name={yAccessor.label} tick={{ fontSize: 12 }} />
+    <XAxis dataKey="_deltas.temp_delta" name="tempΔ(°C)" tick={{ fontSize: 10 }} />
+     <YAxis dataKey={yAccessor.key} name={yAccessor.label} tick={{ fontSize: 10 }} />
     <Tooltip />
-    <Scatter name="drips" data={beanDrips} />
+    <Scatter name="drips" data={beanDrips} shape="circle" r={2} />
   </ScatterChart>
 </ChartFrame>
               
