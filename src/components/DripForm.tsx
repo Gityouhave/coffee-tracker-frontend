@@ -236,26 +236,6 @@ export function pickRecommendedDrippers(args:{ bean?:any; beanStats?:any|null })
   }));
 }
 
-  if (isFerment) pushUnique(cands, 'クレバー','ハリオスイッチ','フレンチプレス','ネル');
-  if (isNatural) pushUnique(cands, 'クレバー','ハリオスイッチ','カリタウェーブ','ハリオ','フラワー');
-  if (isHoney)   pushUnique(cands, 'ハリオ','カリタウェーブ','フラワー','クレバー');
-  if (isWashed)  pushUnique(cands, 'ハリオ','フラワー','カリタウェーブ','コーノ');
-
-  if (light) pushUnique(cands, 'ハリオ','フラワー','カリタウェーブ','コーノ');
-  if (dark)  pushUnique(cands, 'ネル','フレンチプレス','クレバー','ハリオスイッチ');
-
-  if (/(エチオピア|ケニア|ルワンダ|ブルンジ|コロンビア|グアテマラ)/.test(origin)) {
-    pushUnique(cands, 'フラワー','ハリオ','カリタウェーブ');
-  }
-
-  if (cands.length===0) pushUnique(cands, 'ハリオ','カリタウェーブ','クレバー');
-
-  return cands.slice(0,5).map(x=>({
-    name: x,
-    purpose: purposeDict[x] ?? '—'
-  }));
-};
-
 /** 焙煎度→推奨湯温（℃） */
 const ROAST_TEMP: Record<string, number> = {
   'ライト': 92.5, 'シナモン': 90.0, 'ミディアム': 87.5, 'ハイ': 85.0,
@@ -1132,51 +1112,64 @@ export function DripForm({API, beans, onSaved}:{API:string; beans:any[]; onSaved
           </div>
         </div>
 
-        {/* ドリッパー */}
-        <div>
-                    <div className="text-xs text-gray-600 mt-2">
-            推奨ドリッパーTOP5：
-           <li key={i} className="my-1">
-  <div className="flex flex-wrap items-center gap-2">
-    <b>{d.name}</b>
-    <span className="text-xs text-gray-600">— {d.purpose}</span>
-    {i===0 && (
-      <button type="button"
-        className="ml-1 px-2 py-0.5 rounded border bg-white hover:bg-gray-50"
-        onClick={()=> handle('dripper', d.name)}
-      >適用</button>
+       {/* ドリッパー */}
+<div>
+  <div className="text-xs text-gray-600 mt-2">推奨ドリッパーTOP5：</div>
+  <ul className="mt-1">
+    {recommendedDrippers && recommendedDrippers.length > 0 ? (
+      recommendedDrippers.map((d, i) => (
+        <li key={d.name || i} className="my-1">
+          <div className="flex flex-wrap items-center gap-2">
+            <b>{d.name}</b>
+            <span className="text-xs text-gray-600">— {d.purpose}</span>
+            {i === 0 && (
+              <button
+                type="button"
+                className="ml-1 px-2 py-0.5 rounded border bg-white hover:bg-gray-50"
+                onClick={() => handle('dripper', d.name)}
+              >
+                適用
+              </button>
+            )}
+          </div>
+          {d.reasons?.length > 0 && (
+            <div className="mt-0.5 flex flex-wrap gap-1">
+              {d.reasons.map((r, ri) => (
+                <span
+                  key={`${d.name}-r-${ri}`}
+                  className="text-[11px] px-1.5 py-0.5 rounded bg-gray-100 border text-gray-700"
+                >
+                  {r}
+                </span>
+              ))}
+            </div>
+          )}
+        </li>
+      ))
+    ) : (
+      <li>—</li>
     )}
+  </ul>
+
+  <select
+    className="border rounded p-2 w-full"
+    value={form.dripper || ''}
+    onChange={(e) => handle('dripper', e.target.value)}
+  >
+    <option value="">ドリッパー</option>
+    {[
+      '水出し','エアロプレス','クレバー','ハリオスイッチ','ハリオ','フラワー',
+      'クリスタル','カリタウェーブ','ブルーボトル','コーノ','フィン','ネル',
+      'フレンチプレス','エスプレッソ','モカポット','サイフォン',
+    ].map((x) => (
+      <option key={x}>{x}</option>
+    ))}
+  </select>
+
+  <div className="text-xs text-gray-600 mt-1">
+    ドリッパー理論：{form.dripper ? (derive?.theory?.dripper ?? '—') : '--'}
   </div>
-  {d.reasons?.length>0 && (
-    <div className="mt-0.5 flex flex-wrap gap-1">
-      {d.reasons.map((r,ri)=>(
-        <span key={ri}
-          className="text-[11px] px-1.5 py-0.5 rounded bg-gray-100 border text-gray-700">
-          {r}
-        </span>
-      ))}
-    </div>
-  )}
-</li>
-                ))
-              ) : (
-                <li>—</li>
-              )}
-            </ul>
-          </div>
-          <select
-            className="border rounded p-2 w-full"
-            value={form.dripper||''}
-            onChange={e=>handle('dripper',e.target.value)}
-          >
-            <option value="">ドリッパー</option>
-            {['水出し','エアロプレス','クレバー','ハリオスイッチ','ハリオ','フラワー','クリスタル','カリタウェーブ','ブルーボトル','コーノ','フィン','ネル','フレンチプレス','エスプレッソ','モカポット','サイフォン'].map(x=> <option key={x}>{x}</option>)}
-          </select>
-          <div className="text-xs text-gray-600 mt-1">
-            ドリッパー理論：{ form.dripper ? (derive?.theory?.dripper ?? '—') : '--' }
-          </div>
-        </div>
-      </div>
+</div>
 
       {/* 3カラム：豆量 / 湯量 / 落ちきり量 */}
       <div className="grid grid-cols-3 gap-2">
