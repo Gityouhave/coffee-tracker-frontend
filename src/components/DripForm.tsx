@@ -106,11 +106,15 @@ const deltaTime = (actualSec?:number|null, recSec?:number|null) => {
   return `(${sign}${mm}:${String(ss).padStart(2,'0')})`;
 };
 // === END: radar & flags helpers ===
-
+// 安全に「国旗つき産地文字列」を作る（flagifyOriginList が配列でも文字列でもOKにする）
+const flagifyOrigins = (orig?: string | string[] | null) => {
+  const arr = Array.isArray(orig) ? orig : splitOrigins(String(orig ?? ''));
+  const flagged = flagifyOriginList(arr);
+  return Array.isArray(flagged) ? flagged.join('・') : (typeof flagged === 'string' ? flagged : '—');
+};
 // 統一フォーマットのラベル（豆名（旗｜焙煎｜エイジング）／ドリッパー：挽き…・湯温…（Δ）・…）
 const mkLabelSub = (d:any, bean:any)=>{
-  const origins = bean?.origin ? splitOrigins(String(bean.origin)) : [];
-  const countryFlags = origins.length ? flagifyOriginList(origins).join('・') : '—';
+ const countryFlags = flagifyOrigins(bean?.origin);
   const age = fmtAgingDays(bean, d?.brew_date);
   const { recTemp, recTime } = recommendForDrip({
     roast_level: d?.roast_level, derive: d?.derive, label20: d?.label20,
@@ -454,32 +458,6 @@ const applyFromDrip = (d:any) => {
         dripper: d.dripper ?? null,
         storage: d.storage ?? null,
       }) : {}
-  // BEGIN: mkLabelSub（統一フォーマット：その記録の条件を基準にΔを計算）
-const mkLabelSub = (d:any, bean:any)=>{
-  const origins = bean?.origin ? splitOrigins(String(bean.origin)) : [];
-  const countryFlags = origins.length ? flagifyOriginList(origins).join('・') : '—';
-  const age = fmtAgingDays(bean, d?.brew_date);
-
-  // その記録の焙煎度/挽きラベルから推奨を算出
-  const { recTemp, recTime } = recommendForDrip({
-    roast_level: d?.roast_level,
-    derive: d?.derive, label20: d?.label20, // grind20() で拾えるよう最低限渡す
-  });
-
-  const head = `${bean?.name||'—'}（${countryFlags}｜${bean?.roast_level||'—'}｜${age}） ／ ${d?.dripper||'—'}：`;
-  const g20 = grind20(d);
-  const g6  = grindGroup6(g20);
-
-  const body = [
-    Number.isFinite(d?.grind)        ? `挽き${d.grind}${g6?`（${g6}）`:''}` : null,
-    Number.isFinite(d?.water_temp_c) ? `湯温${d.water_temp_c}℃${deltaTemp(d?.water_temp_c, recTemp ?? null)}` : null,
-    Number.isFinite(d?.dose_g)       ? `豆${d.dose_g}g` : null,
-    Number.isFinite(d?.water_g)      ? `湯量${d.water_g}g` : null,
-    Number.isFinite(d?.time_sec)     ? `時間${secToMMSS(d.time_sec)}${deltaTime(d?.time_sec, recTime ?? null)}` : null,
-  ].filter(Boolean).join('・');
-
-  return `${head}${body}`;
-};
 // END: mkLabelSub
 const pats: BestPattern[] = [];
 if (bestSR) pats.push({
