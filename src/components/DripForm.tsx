@@ -5,6 +5,7 @@ import {
   RadarChart, PolarGrid, PolarAngleAxis, PolarRadiusAxis, Radar,
   ScatterChart, Scatter
 } from 'recharts'
+import { flagify, flagifyOriginList } from '../utils/flags'
 
 import { filterSortBeans, beanOptionLabel, ROASTS } from '../utils/beanFilters'
 import { ORIGINS } from '../constants/origins'
@@ -573,7 +574,7 @@ const RatingSelect = ({
                     const v = Array.from(e.target.selectedOptions).map(o=>o.value)
                     setOriginFilter(v)
                   }}>
-            {ORIGINS.map(o=> <option key={o} value={o}>{o}</option>)}
+            {ORIGINS.map(o=> <option key={o} value={o}>{flagify(o)}</option>)}
           </select>
         </div>
         <div>
