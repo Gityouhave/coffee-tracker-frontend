@@ -5,7 +5,7 @@ import {
   RadarChart, PolarGrid, PolarAngleAxis, PolarRadiusAxis, Radar,
   ScatterChart, Scatter
 } from 'recharts'
-import { flagify, flagifyOriginList } from '../utils/flags'
+import { flagify, flagifyOriginList, splitOrigins } from '../utils/flags'
 
 import { filterSortBeans, beanOptionLabel, ROASTS } from '../utils/beanFilters'
 import { ORIGINS } from '../constants/origins'
@@ -476,15 +476,13 @@ if (!form.brew_date) {
     return (<span aria-label={`rating ${s} of 5`}>{'★★★★★'.slice(0,s)}{'☆☆☆☆☆'.slice(0,5-s)} <span className="text-[11px] text-gray-500">({avg})</span></span>)
   }
   const originTheoryText = ()=>{
-  if(!selBean?.origin) return '—'
-  const cs = String(selBean.origin).split(',').map(s=>s.trim()).filter(Boolean)
-  const notes = cs.map(c => {
-    const theory = ORIGIN_THEORIES[c]
-    if(!theory || isUnknown(theory)) return '' // 未指定/不明は出さない
-    return `${withFlag(c)}（${theory}）`
-  }).filter(Boolean)
-  return notes.length ? notes.join(' ／ ') : '—'
-}
+  if(!selBean?.origin) return '—';
+  const cs = splitOrigins(selBean.origin);
+  const notes = cs
+    .map(c => ORIGIN_THEORIES[c] ? `${flagify(c)}：${ORIGIN_THEORIES[c]}` : '')
+    .filter(Boolean);
+  return notes.length ? notes.join(' ／ ') : '—';
+};
   // ...originTheoryText の直後に↓を置く
 // --- 5段階評価セレクト（選択肢エラー回避用） ---
 const to5step = (v: any) => {
