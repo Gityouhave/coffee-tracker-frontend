@@ -1,4 +1,5 @@
 // src/utils/beanFilters.ts
+import { flagifyOriginList } from './flags';
 export type StockFilter = 'all' | 'in' | 'out'
 export type SortKey = 'roast_date' | 'roast_level' | 'ppg' | 'name'
 
@@ -66,7 +67,6 @@ export function filterSortBeans(
 
   return list.sort(cmp)
 }
-import { flagifyOriginList } from './flags';
 
 export function beanOptionLabel(b: any) {
   const name = b?.name ?? '—';
