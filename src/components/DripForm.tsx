@@ -827,89 +827,84 @@ export function DripForm({API, beans, onSaved}:{API:string; beans:any[]; onSaved
         {hasAvg && (<div className="text-sm">平均評価（★）：<StarRow avg={beanStats?.avg_overall} /></div>)}
 
       {hasRadar && showSection.radar && (
-  <div className="space-y-2">
-    <div className="flex flex-wrap items-center gap-2 text-xs">
-      <span>暫定最適値の基準：</span>
-      <select
-        className="border rounded p-1"
-        value={bestMetric}
-        onChange={(e)=>setBestMetric(e.target.value as TasteKey)}
-      >
-        {TASTE_KEYS.map(t=> <option key={t.key} value={t.key}>{t.label}</option>)}
-      </select>
-    </div>
-
-    <div className="grid gap-3 md:grid-cols-3">
-
-{(['thisBean','sameRoast','originNear'] as ScopeKey[])
-  .map(scope => {
-    const d = bestByScopeMetric?.[scope]?.[bestMetric];
-    const title = scopeTitle(scope); // ← これが必須
-
-    if (!d) {
-      return (
-        <div key={scope} className="border rounded p-3 bg-white text-xs text-gray-500">
-          {title}（{metricJp(bestMetric)}）：データなし
-        </div>
-      );
-    }
-
-    const bean = beans.find(b=> String(b.id)===String(d.bean_id));
-    const radarData = [
-      {subject:'クリーンさ',  value:Number(d?.ratings?.clean)||0},
-      {subject:'風味',        value:Number(d?.ratings?.flavor)||0},
-      {subject:'酸味',        value:Number(d?.ratings?.acidity)||0},
-      {subject:'苦味',        value:Number(d?.ratings?.bitterness)||0},
-      {subject:'甘味',        value:Number(d?.ratings?.sweetness)||0},
-      {subject:'コク',        value:Number(d?.ratings?.body)||0},
-      {subject:'後味',        value:Number(d?.ratings?.aftertaste)||0},
-    ];
-    const color =
-      scope === 'thisBean' ? RADAR_COLORS.thisBeanBest
-      : scope === 'sameRoast' ? RADAR_COLORS.sameRoastBest
-      : RADAR_COLORS.originNearBest;
-
-    return (
-      <div key={scope} className="border rounded bg-white p-3 flex flex-col gap-2">
-        <div className="flex items-center justify-between">
-          <div className="text-sm font-semibold">
-            {title}（{metricJp(bestMetric)}）
+        <div className="space-y-2">
+          <div className="flex flex-wrap items-center gap-2 text-xs">
+            <span>暫定最適値の基準：</span>
+            <select
+              className="border rounded p-1"
+              value={bestMetric}
+              onChange={(e)=>setBestMetric(e.target.value as TasteKey)}
+            >
+              {TASTE_KEYS.map(t=> <option key={t.key} value={t.key}>{t.label}</option>)}
+            </select>
           </div>
-          <button
-            type="button"
-            onClick={()=> applyFromDrip(d)}
-            className="px-2 py-1 rounded border bg-white hover:bg-gray-50 text-xs"
-          >
-            この値を適用
-          </button>
-        </div>
 
-        <div className="h-56">
-          <ResponsiveContainer>
-            <RadarChart data={radarData}>
-              <PolarGrid />
-              <PolarAngleAxis dataKey="subject" />
-              <PolarRadiusAxis angle={30} domain={[0,10]} />
-              <Radar name={title} dataKey="value"
-                stroke={color.stroke} fill={color.fill} fillOpacity={0.35} />
-              <Tooltip />
-            </RadarChart>
-          </ResponsiveContainer>
-        </div>
+          <div className="grid gap-3 md:grid-cols-3">
+            {(['thisBean','sameRoast','originNear'] as ScopeKey[]).map(scope => {
+              const d = bestByScopeMetric?.[scope]?.[bestMetric];
+              const title = scopeTitle(scope);
+              if (!d) {
+                return (
+                  <div key={scope} className="border rounded p-3 bg-white text-xs text-gray-500">
+                    {title}（{metricJp(bestMetric)}）：データなし
+                  </div>
+                );
+              }
+              const bean = beans.find(b=> String(b.id)===String(d.bean_id));
+              const radarData = [
+                {subject:'クリーンさ',  value:Number(d?.ratings?.clean)||0},
+                {subject:'風味',        value:Number(d?.ratings?.flavor)||0},
+                {subject:'酸味',        value:Number(d?.ratings?.acidity)||0},
+                {subject:'苦味',        value:Number(d?.ratings?.bitterness)||0},
+                {subject:'甘味',        value:Number(d?.ratings?.sweetness)||0},
+                {subject:'コク',        value:Number(d?.ratings?.body)||0},
+                {subject:'後味',        value:Number(d?.ratings?.aftertaste)||0},
+              ];
+              const color =
+                scope === 'thisBean' ? RADAR_COLORS.thisBeanBest
+                : scope === 'sameRoast' ? RADAR_COLORS.sameRoastBest
+                : RADAR_COLORS.originNearBest;
 
-        <div className="text-xs whitespace-pre-wrap leading-5">
-          {makeMultilineLabel(d, bean, title, bestMetric)}
-        </div>
-      </div>
-    );
-})}
-    </div>
-  </div>
-)}
+              return (
+                <div key={scope} className="border rounded bg-white p-3 flex flex-col gap-2">
+                  <div className="flex items-center justify-between">
+                    <div className="text-sm font-semibold">
+                      {title}（{metricJp(bestMetric)}）
+                    </div>
+                    <button
+                      type="button"
+                      onClick={()=> applyFromDrip(d)}
+                      className="px-2 py-1 rounded border bg-white hover:bg-gray-50 text-xs"
+                    >
+                      この値を適用
+                    </button>
+                  </div>
 
+                  <div className="h-56">
+                    <ResponsiveContainer>
+                      <RadarChart data={radarData}>
+                        <PolarGrid />
+                        <PolarAngleAxis dataKey="subject" />
+                        <PolarRadiusAxis angle={30} domain={[0,10]} />
+                        <Radar name={title} dataKey="value"
+                          stroke={color.stroke} fill={color.fill} fillOpacity={0.35} />
+                        <Tooltip />
+                      </RadarChart>
+                    </ResponsiveContainer>
+                  </div>
 
+                  <div className="text-xs whitespace-pre-wrap leading-5">
+                    {makeMultilineLabel(d, bean, title, bestMetric)}
+                  </div>
+                </div>
+              );
+            })}
           </div>
-        )}
+        </div>
+      )}
+
+      </div>  {/* ← セオリー & 統計コンテナの閉じ。ここで止める。余計な `)}` は置かない */}
+          </div>
 
         {/* 豆ごとバー（抽出方法別平均） */}
         {hasStats && (
