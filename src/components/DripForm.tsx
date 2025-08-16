@@ -157,57 +157,45 @@ const makeMultilineLabel = (d:any, bean:any, title:string, metric?:TasteKey)=>{
 };
 
 
- // === Dripper recommendation (TOP5) ===
-// コンポーネントの外（ファイル先頭付近）に置く
+// === Dripper recommendation (TOP5 with reasons) ===
 const purposeDict: Record<string, string> = {
-  'ハリオ':'クリアで酸を活かす',
-  'フラワー':'華やかな香りを引き出す',
-  'カリタウェーブ':'バランス型、均一抽出',
-  'コーノ':'柔らかい質感と甘み',
-  'クレバー':'甘みとボディを強調',
-  'ハリオスイッチ':'透過と浸漬の中間',
-  'ネル':'コクと深みを増す',
-  'フレンチプレス':'オイル感と重厚な口当たり',
-  'エアロプレス':'可変性高く実験的',
-  '水出し':'まろやか＆低酸味',
-  'サイフォン':'香りと透明感',
-  'モカポット':'濃厚・エスプレッソ風',
-  'エスプレッソ':'凝縮感・厚み',
-  'クリスタル':'高い透明感',
-  'ブルーボトル':'やや早流速・整った味',
-  'フィン':'しっかり抽出'
+  'ハリオ':'クリアで酸を活かす','フラワー':'華やかな香りを引き出す','カリタウェーブ':'バランス型、均一抽出',
+  'コーノ':'柔らかい質感と甘み','クレバー':'甘みとボディを強調','ハリオスイッチ':'透過と浸漬の中間',
+  'ネル':'コクと深みを増す','フレンチプレス':'オイル感と重厚な口当たり','エアロプレス':'可変性高く実験的',
+  '水出し':'まろやか＆低酸味','サイフォン':'香りと透明感','モカポット':'濃厚・エスプレッソ風',
+  'エスプレッソ':'凝縮感・厚み','クリスタル':'高い透明感','ブルーボトル':'やや早流速・整った味','フィン':'しっかり抽出'
 };
 
-type DripPick = { name: string; purpose: string };
+type DripPick = { name: string; purpose: string; reasons: string[] };
 
-export function pickRecommendedDrippers(args: {
-  bean?: any;
-  beanStats?: any | null;
-}): DripPick[] {
+export function pickRecommendedDrippers(args:{ bean?:any; beanStats?:any|null }): DripPick[] {
   const { bean, beanStats } = args || {};
-  const roast = String(bean?.roast_level || '');
-  const process = String(bean?.process || '');
-  const addl = String(bean?.addl_process || '');
-  const origin = String(bean?.origin || '');
+  const roast   = String(bean?.roast_level||'');
+  const process = String(bean?.process||'');
+  const addl    = String(bean?.addl_process||'');
+  const origin  = String(bean?.origin||'');
 
-  // 1) 実績ベース（avg_overall降順、countがあれば僅かに加点）
-  const empiricalNames: string[] = [];
+  const reasonMap: Record<string, Set<string>> = {};
+  const addReason = (name:string, r:string)=>{
+    if(!name || !r) return;
+    (reasonMap[name] ||= new Set()).add(r);
+  };
+
+  // 1) 実績（avg_overall降順。countがあれば微加点）
   const byMethod = Array.isArray(beanStats?.by_method)
-    ? (beanStats.by_method as Array<{ dripper: string; avg_overall: number; count?: number }>)
+    ? (beanStats.by_method as Array<{dripper:string; avg_overall:number; count?:number}>)
     : [];
-
   const empiricalSorted = byMethod
-    .filter(x => x?.dripper && Number.isFinite(x?.avg_overall))
-    .map(x => ({
-      name: x.dripper,
-      score: Number(x.avg_overall) + (Number(x.count || 0) * 0.01) // 同点時に微差を付ける
-    }))
-    .sort((a, b) => b.score - a.score)
-    .map(x => x.name);
+    .filter(x=>x?.dripper && Number.isFinite(x?.avg_overall))
+    .map(x=>({ name:x.dripper, score:Number(x.avg_overall)+(Number(x.count||0)*0.01), avg:x.avg_overall, n:x.count||0 }))
+    .sort((a,b)=> b.score - a.score);
 
-  empiricalNames.push(...empiricalSorted);
+  const empiricalNames = empiricalSorted.map(x=>x.name);
+  empiricalSorted.forEach(x=>{
+    addReason(x.name, `実績: 平均${x.avg.toFixed(1)}${x.n?`（n=${x.n}）`:''}`);
+  });
 
-  // 2) ルールベース候補（優先順）
+  // 2) ルール（プロセス/焙煎/産地）
   const p = (process + ' ' + addl).toLowerCase();
   const isFerment = /(anaer|carbonic|酵素|発酵|macera|yeast)/i.test(p);
   const isNatural = /(natural|ナチュラル)/i.test(p);
@@ -215,38 +203,36 @@ export function pickRecommendedDrippers(args: {
   const isWashed  = /(wash|ウォッシュ)/i.test(p);
   const light = /(ライト|シナモン|ミディアム|ハイ)/.test(roast);
   const dark  = /(フルシティ|フレンチ|イタリアン)/.test(roast);
-
-  const ruleCands: string[] = [];
-  const pushUnique = (arr: string[], ...xs: string[]) => {
-    xs.forEach(x => { if (x && !arr.includes(x)) arr.push(x); });
+  const push = (arr:string[], ...xs:string[])=>{
+    xs.forEach(x=>{ if(x && !arr.includes(x)) arr.push(x); });
   };
 
-  if (isFerment) pushUnique(ruleCands, 'クレバー','ハリオスイッチ','フレンチプレス','ネル');
-  if (isNatural) pushUnique(ruleCands, 'クレバー','ハリオスイッチ','カリタウェーブ','ハリオ','フラワー');
-  if (isHoney)   pushUnique(ruleCands, 'ハリオ','カリタウェーブ','フラワー','クレバー');
-  if (isWashed)  pushUnique(ruleCands, 'ハリオ','フラワー','カリタウェーブ','コーノ');
+  const ruleCands:string[] = [];
+  if (isFerment){ push(ruleCands,'クレバー','ハリオスイッチ','フレンチプレス','ネル'); ['クレバー','ハリオスイッチ','フレンチプレス','ネル'].forEach(n=>addReason(n,'精製: 発酵系')); }
+  if (isNatural){ push(ruleCands,'クレバー','ハリオスイッチ','カリタウェーブ','ハリオ','フラワー'); ['クレバー','ハリオスイッチ','カリタウェーブ','ハリオ','フラワー'].forEach(n=>addReason(n,'精製: ナチュラル')); }
+  if (isHoney)  { push(ruleCands,'ハリオ','カリタウェーブ','フラワー','クレバー'); ['ハリオ','カリタウェーブ','フラワー','クレバー'].forEach(n=>addReason(n,'精製: ハニー')); }
+  if (isWashed) { push(ruleCands,'ハリオ','フラワー','カリタウェーブ','コーノ'); ['ハリオ','フラワー','カリタウェーブ','コーノ'].forEach(n=>addReason(n,'精製: ウォッシュト')); }
 
-  if (light) pushUnique(ruleCands, 'ハリオ','フラワー','カリタウェーブ','コーノ');
-  if (dark)  pushUnique(ruleCands, 'ネル','フレンチプレス','クレバー','ハリオスイッチ');
+  if (light){ ['ハリオ','フラワー','カリタウェーブ','コーノ'].forEach(n=>{ push(ruleCands,n); addReason(n,'焙煎: 浅〜中浅'); }); }
+  if (dark) { ['ネル','フレンチプレス','クレバー','ハリオスイッチ'].forEach(n=>{ push(ruleCands,n); addReason(n,'焙煎: 深'); }); }
 
-  if (/(エチオピア|ケニア|ルワンダ|ブルンジ|コロンビア|グアテマラ)/.test(origin)) {
-    pushUnique(ruleCands, 'フラワー','ハリオ','カリタウェーブ');
+  if (/(エチオピア|ケニア|ルワンダ|ブルンジ|コロンビア|グアテマラ)/.test(origin)){
+    ['フラワー','ハリオ','カリタウェーブ'].forEach(n=>{ push(ruleCands,n); addReason(n,'産地: 高香り系'); });
   }
 
-  // 3) マージ（実績を優先→ルールで補完→デフォルトで埋める）
+  // 3) マージ（実績優先→ルール→デフォルト）
   const defaults = ['ハリオ','カリタウェーブ','クレバー','フラワー','ネル'];
-  const merged: string[] = [];
-
-  const add = (name: string) => { if (name && !merged.includes(name)) merged.push(name); };
+  const merged:string[] = [];
+  const add = (n:string)=>{ if(n && !merged.includes(n)) merged.push(n); };
 
   empiricalNames.forEach(add);
   ruleCands.forEach(add);
   defaults.forEach(add);
 
-  // 最大5件に整理して返す
-  return merged.slice(0, 5).map(name => ({
+  return merged.slice(0,5).map(name=>({
     name,
-    purpose: purposeDict[name] ?? '—'
+    purpose: purposeDict[name] ?? '—',
+    reasons: Array.from(reasonMap[name] || [])
   }));
 }
 
@@ -1150,22 +1136,28 @@ export function DripForm({API, beans, onSaved}:{API:string; beans:any[]; onSaved
         <div>
                     <div className="text-xs text-gray-600 mt-2">
             推奨ドリッパーTOP5：
-            <ul className="list-disc list-inside">
-              {recommendedDrippers.length > 0 ? (
-                recommendedDrippers.map((d,i)=>(
-                  <li key={i} className="my-0.5">
-                    <b>{d.name}</b> — {d.purpose}
-                    {/* 1位はワンタッチ適用ボタン */}
-                    {i===0 && (
-                      <button
-                        type="button"
-                        className="ml-2 px-2 py-0.5 rounded border bg-white hover:bg-gray-50"
-                        onClick={()=> handle('dripper', d.name)}
-                      >
-                        適用
-                      </button>
-                    )}
-                  </li>
+           <li key={i} className="my-1">
+  <div className="flex flex-wrap items-center gap-2">
+    <b>{d.name}</b>
+    <span className="text-xs text-gray-600">— {d.purpose}</span>
+    {i===0 && (
+      <button type="button"
+        className="ml-1 px-2 py-0.5 rounded border bg-white hover:bg-gray-50"
+        onClick={()=> handle('dripper', d.name)}
+      >適用</button>
+    )}
+  </div>
+  {d.reasons?.length>0 && (
+    <div className="mt-0.5 flex flex-wrap gap-1">
+      {d.reasons.map((r,ri)=>(
+        <span key={ri}
+          className="text-[11px] px-1.5 py-0.5 rounded bg-gray-100 border text-gray-700">
+          {r}
+        </span>
+      ))}
+    </div>
+  )}
+</li>
                 ))
               ) : (
                 <li>—</li>
