@@ -1180,6 +1180,7 @@ export function DripForm({API, beans, onSaved}:{API:string; beans:any[]; onSaved
     ドリッパー理論：{form.dripper ? (derive?.theory?.dripper ?? '—') : '--'}
   </div>
 </div>
+        </div>  
 
       {/* 3カラム：豆量 / 湯量 / 落ちきり量 */}
       <div className="grid grid-cols-3 gap-2">
