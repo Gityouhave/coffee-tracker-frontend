@@ -631,12 +631,12 @@ export function DripForm({API, beans, onSaved}:{API:string; beans:any[]; onSaved
   const hasStats     = !!(beanStats && Number(beanStats.count) > 0)
   const hasAvg       = !!(hasStats && beanStats.avg_overall != null)
   const hasByMethod  = !!(hasStats && Array.isArray(beanStats.by_method) && beanStats.by_method.length > 0)
-  const hasRadar = useMemo(()=>{
-    const s = bestByScopeMetric
-    const hasAvgVal = !!Object.keys(beanAvgRatings||{}).length
-    const anyBest = !!(s?.thisBean?.[bestMetric] || s?.sameRoast?.[bestMetric] || s?.originNear?.[bestMetric])
-    return hasAvgVal && anyBest
-  }, [beanAvgRatings, bestByScopeMetric, bestMetric])
+  const hasRadar = useMemo(() => {
+  const hasAvg = Object.keys(beanAvgRatings || {}).length > 0;
+  const s = bestByScopeMetric;
+  const anyBest = !!(s?.thisBean?.[bestMetric] || s?.sameRoast?.[bestMetric] || s?.originNear?.[bestMetric]);
+  return hasAvg && anyBest;
+}, [beanAvgRatings, bestByScopeMetric, bestMetric]);
   const hasPairsTemp = (beanPairsTemp.length > 0)
   const hasPairsTime = (beanPairsTime.length > 0)
 
@@ -852,6 +852,7 @@ const scopeTitle = (s: ScopeKey) =>
       {(['thisBean','sameRoast','originNear'] as ScopeKey[]).map(scope => {
         const d = bestByScopeMetric?.[scope]?.[bestMetric];
         const title = scopeTitle(scope);
+
         if (!d) {
           return (
             <div key={scope} className="border rounded p-3 bg-white text-xs text-gray-500">
@@ -871,7 +872,6 @@ const scopeTitle = (s: ScopeKey) =>
           {subject:'後味',        value:Number(d?.ratings?.aftertaste)||0},
         ];
 
-        // スコープ別の色を選択
         const color =
           scope === 'thisBean' ? RADAR_COLORS.thisBeanBest
           : scope === 'sameRoast' ? RADAR_COLORS.sameRoastBest
@@ -894,7 +894,7 @@ const scopeTitle = (s: ScopeKey) =>
               </button>
             </div>
 
-            {/* レーダーチャート（単独表示） */}
+            {/* レーダーチャート（単独） */}
             <div className="h-56">
               <ResponsiveContainer>
                 <RadarChart data={radarData}>
@@ -913,7 +913,7 @@ const scopeTitle = (s: ScopeKey) =>
               </ResponsiveContainer>
             </div>
 
-            {/* 右側に欲しいフォーマットの詳細（改行テキスト） */}
+            {/* 詳細ラベル（例の3行表記） */}
             <div className="text-xs whitespace-pre-wrap leading-5">
               {makeMultilineLabel(d, bean, title, bestMetric)}
             </div>
@@ -922,7 +922,8 @@ const scopeTitle = (s: ScopeKey) =>
       })}
     </div>
   </div>
-)}thisBean?.[bestMetric];
+)}
+thisBean?.[bestMetric];
               const sr = bestByScopeMetric?.sameRoast?.[bestMetric];
               const on = bestByScopeMetric?.originNear?.[bestMetric];
               const val = (d:any,k: TasteKey)=> Number(d?.ratings?.[k])||0;
