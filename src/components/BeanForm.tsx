@@ -3,6 +3,7 @@ import React, { useEffect, useMemo, useState } from 'react'
 import { ORIGIN_THEORIES } from '../constants/originTheories'
 import { filterSortBeans, beanOptionLabel } from '../utils/beanFilters'
 import { ORIGINS } from '../constants/origins'
+import { flagify } from '../utils/flags'
 
 const PROCESS_OPTIONS = [
   '不明','ナチュラル','ウォッシュド','ハニー','レッドハニー','イエローハニー','ホワイトハニー','スマトラ'
@@ -391,7 +392,7 @@ try { onSaved?.() } catch {}
                 const v = Array.from(e.target.selectedOptions).map(o=>o.value)
                 setOriginFilter(v)
               }}>
-        {ORIGINS.map(o=> <option key={o} value={o}>{o}</option>)}
+        {ORIGINS.map(o=> <option key={o} value={o}>{flagify(o)}</option>)}
       </select>
     </div>
     <div>
