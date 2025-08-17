@@ -176,18 +176,69 @@ const makeMultilineLabel = (d:any, bean:any, title:string, metric?:TasteKey)=>{
 
 
 // === Dripper recommendation (TOP5 with reasons) ===
-const purposeDict: Record<string, string> = {
-  'ハリオ':'クリアで酸を活かす','フラワー':'華やかな香りを引き出す','カリタウェーブ':'バランス型、均一抽出',
-  'コーノ':'柔らかい質感と甘み','クレバー':'甘みとボディを強調','ハリオスイッチ':'透過と浸漬の中間',
-  'ネル':'コクと深みを増す','フレンチプレス':'オイル感と重厚な口当たり','エアロプレス':'可変性高く実験的',
-  '水出し':'まろやか＆低酸味','サイフォン':'香りと透明感','モカポット':'濃厚・エスプレッソ風',
-  'エスプレッソ':'凝縮感・厚み','クリスタル':'高い透明感','ブルーボトル':'やや早流速・整った味','フィン':'しっかり抽出'
+// === Dripper details (丁寧説明+短タグ) ===
+type DripperDetail = {
+  short: string;          // 一言サマリ
+  desc: string;           // 丁寧な説明（2〜3行）
+  tags: string[];         // 箇条タグ
+};
+const DRIPPER_DETAILS: Record<string, DripperDetail> = {
+  'ハリオ': { short:'クリアで酸を活かす',
+    desc:'円すい＋単穴。お湯は中心に集まりやすく、適切な注湯で澄んだ味。浅〜中浅で酸やアロマを伸ばしたい時の基軸。',
+    tags:['透過式','流速: 注湯依存','浅〜中浅◎','輪郭が出る'] },
+  'フラワー': { short:'華やかな香りを引き出す',
+    desc:'深いリブでペーパーが壁面に付きにくい。ガス抜けが良く香りが立つ。浅〜中のフルーティに好相性。',
+    tags:['透過式','ガス抜け良好','高香り系','軽やか'] },
+  'カリタウェーブ': { short:'バランス型、均一抽出',
+    desc:'平底＋3穴。ウェーブペーパーで壁面の影響が少なく再現性が高い。味が丸くまとまりやすい安定志向。',
+    tags:['透過式','平底','再現性高','バランス'] },
+  'コーノ': { short:'柔らかい質感と甘み',
+    desc:'リブが途中までで序盤は浸漬寄り。甘みの乗りが良く、とろみのある口当たりになりやすい。',
+    tags:['透過×浸漬','甘み強調','中〜中深◎'] },
+  'クレバー': { short:'甘みとボディを強調',
+    desc:'全量浸漬→開放。粗めでも安定して甘みとボディが出る。発酵系/ナチュラルを丸く整える第一候補。',
+    tags:['浸漬式','安定再現性','重心が下がる','発酵系◎'] },
+  'ハリオスイッチ': { short:'透過と浸漬の中間',
+    desc:'スイッチでドローオフ。浸漬から透過に切替え、甘みとクリアさの両立を狙える可変型。',
+    tags:['浸漬→透過','可変性','幅広い調整','深煎り救済'] },
+  'ネル': { short:'コクと深みを増す',
+    desc:'布で微粉・オイルを保持。丸み・厚み・余韻の伸び。深煎りの甘苦をしっとり表現。',
+    tags:['濾過穏やか','オイル感','厚み/余韻','深煎り最適'] },
+  'フレンチプレス': { short:'オイル感と重厚',
+    desc:'金属メッシュで成分を広く通す。素材感がダイレクトで後味にふくらみ。',
+    tags:['浸漬式','オイル感強','複雑味ダイレクト','深/ナチュラル◎'] },
+  'エアロプレス': { short:'可変性高く実験的',
+    desc:'加圧抽出。粉量・水量・時間・攪拌・フィルタで無数のバリエーション。小ロット検証に最適。',
+    tags:['加圧','自由度MAX','小ロット検証','外でも◎'] },
+  '水出し': { short:'まろやか＆低酸味',
+    desc:'長時間の低温浸出。渋みが出にくく丸い甘み。柑橘酸を抑えたい時に。',
+    tags:['低温長時間','まろやか','低酸味','大容量'] },
+  'サイフォン': { short:'香りと透明感',
+    desc:'加熱上昇→減圧ろ過。クリーンさと香りの両立でクラシックな味わい。',
+    tags:['減圧ろ過','クリーン＆アロマ','ショー性'] },
+  'モカポット': { short:'濃厚・エスプレッソ風',
+    desc:'加圧蒸気で高濃度抽出。濃厚なボディと苦味が立つ。',
+    tags:['加圧蒸気','濃厚','ミルク◎'] },
+  'エスプレッソ': { short:'凝縮感・厚み',
+    desc:'高圧短時間。質量感/余韻が強く、焙煎差・粒度の影響が大きい。',
+    tags:['高圧','極短時間','ミルク展開'] },
+  'クリスタル': { short:'高い透明感',
+    desc:'微粉を強力に止め、輪郭が非常にシャープ。澄明な味の検証に。',
+    tags:['特殊濾過','超クリア','浅煎り輪郭'] },
+  'ブルーボトル': { short:'やや早流速・整う',
+    desc:'大径単穴＋浅いリブ。素直にクリアで軽快にまとまる。',
+    tags:['透過式','流速やや速','軽快'] },
+  'フィン': { short:'しっかり抽出',
+    desc:'ステンレスの滴下。じんわり濃度が上がり甘苦を濃縮。',
+    tags:['金属フィルタ','滴下','濃度高め'] },
 };
 
-type DripPick = { name: string; purpose: string; reasons: string[] };
+type DripPick = { name: string; short: string; desc: string; tags: string[]; reasons: string[] };
 
-export function pickRecommendedDrippers(args:{ bean?:any; beanStats?:any|null }): DripPick[] {
-  const { bean, beanStats } = args || {};
+export function pickRecommendedDrippers(args:{
+  bean?:any; beanStats?:any|null; useEmpiricalRanking?: boolean;
+}): DripPick[] {
+  const { bean, beanStats, useEmpiricalRanking = true } = args || {};
   const roast   = String(bean?.roast_level||'');
   const process = String(bean?.process||'');
   const addl    = String(bean?.addl_process||'');
@@ -195,11 +246,10 @@ export function pickRecommendedDrippers(args:{ bean?:any; beanStats?:any|null })
 
   const reasonMap: Record<string, Set<string>> = {};
   const addReason = (name:string, r:string)=>{
-    if(!name || !r) return;
-    (reasonMap[name] ||= new Set()).add(r);
+    if(!name || !r) return; (reasonMap[name] ||= new Set()).add(r);
   };
 
-  // 1) 実績（avg_overall降順。countがあれば微加点）
+  // 実績（avg_overall降順。count 微加点）
   const byMethod = Array.isArray(beanStats?.by_method)
     ? (beanStats.by_method as Array<{dripper:string; avg_overall:number; count?:number}>)
     : [];
@@ -207,13 +257,10 @@ export function pickRecommendedDrippers(args:{ bean?:any; beanStats?:any|null })
     .filter(x=>x?.dripper && Number.isFinite(x?.avg_overall))
     .map(x=>({ name:x.dripper, score:Number(x.avg_overall)+(Number(x.count||0)*0.01), avg:x.avg_overall, n:x.count||0 }))
     .sort((a,b)=> b.score - a.score);
-
   const empiricalNames = empiricalSorted.map(x=>x.name);
-  empiricalSorted.forEach(x=>{
-    addReason(x.name, `実績: 平均${x.avg.toFixed(1)}${x.n?`（n=${x.n}）`:''}`);
-  });
+  empiricalSorted.forEach(x=> addReason(x.name, `実績: 平均${x.avg.toFixed(1)}${x.n?`（n=${x.n}）`:''}`));
 
-  // 2) ルール（プロセス/焙煎/産地）
+  // ルール（精製/焙煎/産地）
   const p = (process + ' ' + addl).toLowerCase();
   const isFerment = /(anaer|carbonic|酵素|発酵|macera|yeast)/i.test(p);
   const isNatural = /(natural|ナチュラル)/i.test(p);
@@ -221,37 +268,31 @@ export function pickRecommendedDrippers(args:{ bean?:any; beanStats?:any|null })
   const isWashed  = /(wash|ウォッシュ)/i.test(p);
   const light = /(ライト|シナモン|ミディアム|ハイ)/.test(roast);
   const dark  = /(フルシティ|フレンチ|イタリアン)/.test(roast);
-  const push = (arr:string[], ...xs:string[])=>{
-    xs.forEach(x=>{ if(x && !arr.includes(x)) arr.push(x); });
-  };
 
+  const push = (arr:string[], ...xs:string[])=> xs.forEach(x=>{ if(x && !arr.includes(x)) arr.push(x); });
   const ruleCands:string[] = [];
   if (isFerment){ push(ruleCands,'クレバー','ハリオスイッチ','フレンチプレス','ネル'); ['クレバー','ハリオスイッチ','フレンチプレス','ネル'].forEach(n=>addReason(n,'精製: 発酵系')); }
   if (isNatural){ push(ruleCands,'クレバー','ハリオスイッチ','カリタウェーブ','ハリオ','フラワー'); ['クレバー','ハリオスイッチ','カリタウェーブ','ハリオ','フラワー'].forEach(n=>addReason(n,'精製: ナチュラル')); }
   if (isHoney)  { push(ruleCands,'ハリオ','カリタウェーブ','フラワー','クレバー'); ['ハリオ','カリタウェーブ','フラワー','クレバー'].forEach(n=>addReason(n,'精製: ハニー')); }
   if (isWashed) { push(ruleCands,'ハリオ','フラワー','カリタウェーブ','コーノ'); ['ハリオ','フラワー','カリタウェーブ','コーノ'].forEach(n=>addReason(n,'精製: ウォッシュト')); }
-
   if (light){ ['ハリオ','フラワー','カリタウェーブ','コーノ'].forEach(n=>{ push(ruleCands,n); addReason(n,'焙煎: 浅〜中浅'); }); }
   if (dark) { ['ネル','フレンチプレス','クレバー','ハリオスイッチ'].forEach(n=>{ push(ruleCands,n); addReason(n,'焙煎: 深'); }); }
-
   if (/(エチオピア|ケニア|ルワンダ|ブルンジ|コロンビア|グアテマラ)/.test(origin)){
     ['フラワー','ハリオ','カリタウェーブ'].forEach(n=>{ push(ruleCands,n); addReason(n,'産地: 高香り系'); });
   }
 
-  // 3) マージ（実績優先→ルール→デフォルト）
+  // マージ順：実績を反映するかで切替
   const defaults = ['ハリオ','カリタウェーブ','クレバー','フラワー','ネル'];
   const merged:string[] = [];
   const add = (n:string)=>{ if(n && !merged.includes(n)) merged.push(n); };
-
-  empiricalNames.forEach(add);
-  ruleCands.forEach(add);
+  if (useEmpiricalRanking) { empiricalNames.forEach(add); ruleCands.forEach(add); }
+  else                     { ruleCands.forEach(add);     empiricalNames.forEach(add); }
   defaults.forEach(add);
 
-  return merged.slice(0,5).map(name=>({
-    name,
-    purpose: purposeDict[name] ?? '—',
-    reasons: Array.from(reasonMap[name] || [])
-  }));
+  return merged.slice(0,5).map(name=>{
+    const d = DRIPPER_DETAILS[name] || {short:'—',desc:'—',tags:[]};
+    return { name, short:d.short, desc:d.desc, tags:d.tags, reasons:Array.from(reasonMap[name] || []) };
+  });
 }
 
 /** 焙煎度→推奨湯温（℃） */
@@ -321,6 +362,9 @@ export function DripForm({API, beans, onSaved}:{API:string; beans:any[]; onSaved
   )
   const [beanDrips, setBeanDrips] = useState<any[]>([])
   const [allDrips, setAllDrips] = useState<any[]>([])
+  // 実績スイッチ：ランキング反映と表示を独立制御
+const [useEmpiricalRanking, setUseEmpiricalRanking] = useState(true);
+const [showEmpiricalReasons, setShowEmpiricalReasons] = useState(true);
 
   // BEGIN: new states
   const [bestMetric, setBestMetric] = useState<TasteKey>('overall');
@@ -669,8 +713,8 @@ const toggleChart = (k: RadarItemKeyExt) => setShowCharts(s => ({ ...s, [k]: !s[
 
   // 推奨ドリッパーTOP5（実績→ルール）
   const recommendedDrippers = useMemo(
-  () => pickRecommendedDrippers({ bean: selBean, beanStats }),
-  [selBean, beanStats?.by_method] // ← 追加
+  () => pickRecommendedDrippers({ bean: selBean, beanStats, useEmpiricalRanking }),
+  [selBean, beanStats?.by_method, useEmpiricalRanking]
 );
   
   const showOrDash = (cond:any, val:any, dashWhenBean?:string)=> cond ? (val ?? '—') : (dashWhenBean ?? '--')
@@ -1208,7 +1252,7 @@ const splitForNiceRows = (nodes: React.ReactNode[]) => {
  <ChartFrame aspect={2.4} className="max-h-[180px]">
    <ScatterChart margin={{ top: 4, right: 8, bottom: 4, left: 0 }}>
     <CartesianGrid />
-    <XAxis dataKey="_deltas.time_delta" name="timeΔ(s)" tick={{ fontSize: 10 }} />
+    <XAxis dataKey="_deltas.temp_delta" name="tempΔ(°C)" tick={{ fontSize: 10 }} />
      <YAxis dataKey={yAccessor.key} name={yAccessor.label} tick={{ fontSize: 10 }} />
     <Tooltip />
 <Scatter name="drips" data={beanDrips} shape="circle" r={2} />
@@ -1230,7 +1274,7 @@ const splitForNiceRows = (nodes: React.ReactNode[]) => {
               <ChartFrame aspect={2.4} className="max-h-[180px]">
    <ScatterChart margin={{ top: 4, right: 8, bottom: 4, left: 0 }}>
     <CartesianGrid />
-    <XAxis dataKey="_deltas.time_delta" name="timeΔ(s)" tick={{ fontSize: 10 }} />
+    <XAxis dataKey="_deltas.temp_delta" name="tempΔ(°C)" tick={{ fontSize: 10 }} />
      <YAxis dataKey={yAccessor.key} name={yAccessor.label} tick={{ fontSize: 10 }} />
     <Tooltip />
     <Scatter name="drips" data={beanDrips} shape="circle" r={2} />
@@ -1245,46 +1289,61 @@ const splitForNiceRows = (nodes: React.ReactNode[]) => {
          {/* 入力群 */}
       {/* 3カラム：挽き目 / 湯温 / ドリッパー */}
        {/* ドリッパー */}
+{/* --- ドリッパー（先頭セクション） --- */}
 <div>
-  <div className="text-xs text-gray-600 mt-2">推奨ドリッパーTOP5：</div>
-  <ul className="mt-1">
+  <div className="flex items-center justify-between">
+    <div className="text-xs text-gray-600 mt-2">推奨ドリッパーTOP5</div>
+    <div className="flex items-center gap-3 text-[11px]">
+      <label className="inline-flex items-center gap-1">
+        <input type="checkbox" checked={useEmpiricalRanking} onChange={()=>setUseEmpiricalRanking(v=>!v)} />
+        実績をランキングに反映
+      </label>
+      <label className="inline-flex items-center gap-1">
+        <input type="checkbox" checked={showEmpiricalReasons} onChange={()=>setShowEmpiricalReasons(v=>!v)} />
+        実績情報を表示
+      </label>
+    </div>
+  </div>
+
+  <ul className="mt-2 space-y-2">
     {recommendedDrippers && recommendedDrippers.length > 0 ? (
-      recommendedDrippers.map((d, i) => (
-        <li key={d.name || i} className="my-1">
-          <div className="flex flex-wrap items-center gap-2">
-            <b>{d.name}</b>
-            <span className="text-xs text-gray-600">— {d.purpose}</span>
-            {i === 0 && (
-              <button
-                type="button"
-                className="ml-1 px-2 py-0.5 rounded border bg-white hover:bg-gray-50"
-                onClick={() => handle('dripper', d.name)}
-              >
-                適用
-              </button>
-            )}
-          </div>
-          {d.reasons?.length > 0 && (
-            <div className="mt-0.5 flex flex-wrap gap-1">
-              {d.reasons.map((r, ri) => (
-                <span
-                  key={`${d.name}-r-${ri}`}
-                  className="text-[11px] px-1.5 py-0.5 rounded bg-gray-100 border text-gray-700"
-                >
-                  {r}
-                </span>
-              ))}
+      recommendedDrippers.map((d) => {
+        const reasons = (d.reasons||[]).filter(r => showEmpiricalReasons ? true : !r.startsWith('実績:'));
+        return (
+          <li key={d.name} className="border rounded p-2 bg-white">
+            <div className="flex flex-wrap items-baseline gap-2">
+              <b className="text-sm">{d.name}</b>
+              <span className="text-xs text-gray-600">— {d.short}</span>
             </div>
-          )}
-        </li>
-      ))
+            <p className="mt-1 text-[13px] leading-5 text-gray-800">{d.desc}</p>
+            {d.tags?.length > 0 && (
+              <div className="mt-1.5 flex flex-wrap gap-1">
+                {d.tags.map((t, i) => (
+                  <span key={`tag-${d.name}-${i}`} className="text-[11px] px-1.5 py-0.5 rounded bg-gray-100 border text-gray-700">
+                    {t}
+                  </span>
+                ))}
+              </div>
+            )}
+            {reasons.length > 0 && (
+              <div className="mt-1 flex flex-wrap gap-1">
+                {reasons.map((r, i) => (
+                  <span key={`rs-${d.name}-${i}`} className="text-[10px] px-1 py-0.5 rounded bg-gray-50 border text-gray-600">
+                    {r}
+                  </span>
+                ))}
+              </div>
+            )}
+          </li>
+        );
+      })
     ) : (
       <li>—</li>
     )}
   </ul>
 
   <select
-    className="border rounded p-2 w-full"
+    className="border rounded p-2 w-full mt-2"
     value={form.dripper || ''}
     onChange={(e) => handle('dripper', e.target.value)}
   >
@@ -1293,9 +1352,7 @@ const splitForNiceRows = (nodes: React.ReactNode[]) => {
       '水出し','エアロプレス','クレバー','ハリオスイッチ','ハリオ','フラワー',
       'クリスタル','カリタウェーブ','ブルーボトル','コーノ','フィン','ネル',
       'フレンチプレス','エスプレッソ','モカポット','サイフォン',
-    ].map((x) => (
-      <option key={x}>{x}</option>
-    ))}
+    ].map((x) => (<option key={x}>{x}</option>))}
   </select>
 
   <div className="text-xs text-gray-600 mt-1">
