@@ -233,6 +233,26 @@ const DRIPPER_DETAILS: Record<string, DripperDetail> = {
     tags:['金属フィルタ','滴下','濃度高め'] },
 };
 
+// ドリッパーの物性プロファイル（0..1）
+const DRIPPER_PROFILE: Record<string, {clarity:number; body:number; oil:number; speed:number; immersion:number}> = {
+  'ハリオ':        { clarity:0.9,  body:0.3,  oil:0.1,  speed:0.7,  immersion:0.1 },
+  'フラワー':      { clarity:0.85, body:0.35, oil:0.1,  speed:0.7,  immersion:0.1 },
+  'カリタウェーブ':{ clarity:0.7,  body:0.6,  oil:0.2,  speed:0.5,  immersion:0.2 },
+  'コーノ':        { clarity:0.55, body:0.65, oil:0.2,  speed:0.45, immersion:0.35 },
+  'クリスタル':    { clarity:0.98, body:0.2,  oil:0.0,  speed:0.6,  immersion:0.05 },
+  'ブルーボトル':  { clarity:0.8,  body:0.45, oil:0.15, speed:0.75, immersion:0.1 },
+  'クレバー':      { clarity:0.45, body:0.8,  oil:0.35, speed:0.2,  immersion:0.95 },
+  'ハリオスイッチ':{ clarity:0.6,  body:0.7,  oil:0.25, speed:0.35, immersion:0.7 },
+  'フレンチプレス':{ clarity:0.25, body:0.95, oil:0.9,  speed:0.15, immersion:1.0 },
+  'ネル':          { clarity:0.35, body:0.9,  oil:0.7,  speed:0.25, immersion:0.6 },
+  'フィン':        { clarity:0.3,  body:0.85, oil:0.6,  speed:0.2,  immersion:0.8 },
+  '水出し':        { clarity:0.6,  body:0.6,  oil:0.3,  speed:0.0,  immersion:1.0 },
+  'エアロプレス':  { clarity:0.55, body:0.7,  oil:0.4,  speed:0.9,  immersion:0.7 },
+  'エスプレッソ':  { clarity:0.4,  body:1.0,  oil:0.85, speed:1.0,  immersion:0.2 },
+  'モカポット':    { clarity:0.35, body:0.9,  oil:0.7,  speed:0.8,  immersion:0.2 },
+  'サイフォン':    { clarity:0.8,  body:0.55, oil:0.2,  speed:0.5,  immersion:0.4 },
+};
+
 type DripPick = { name: string; short: string; desc: string; tags: string[]; reasons: string[] };
 
 type Reason = { label: string; sign: '+'|'-'; weight: number };
@@ -308,16 +328,42 @@ export function pickRecommendedDrippers(args:{
     ['クリスタル'].forEach(n=> add(n,'産地: 重厚産地×超クリアは細さが出やすい', -0.8));
   }
 
+  // 豆から推定するターゲット（何を伸ばすか）
+const target = { clarity:0.5, body:0.5, oil:0.3, speed:0.5, immersion:0.4 };
+// 浅め・高香り or ウォッシュト → clarity寄り
+if (light || isWashed || /(エチオピア|ケニア|ルワンダ|ブルンジ)/.test(origin)) {
+  target.clarity += 0.25; target.body -= 0.1; target.oil -= 0.15;
+}
+// 深煎り・重厚産地・発酵/ナチュラル → body/oil寄り
+if (dark || /(インドネシア|スマトラ|マンデリン|ブラジル)/.test(origin) || isFerment || isNatural) {
+  target.body += 0.25; target.oil += 0.2; target.clarity -= 0.1;
+}
+// ハニーはやや浸漬寄りが甘みを乗せやすい
+if (isHoney) target.immersion += 0.1;
+
   // スコア集計
   const items = baseList.map(name=>{
     const d = DRIPPER_DETAILS[name] || { short:'', desc:'', tags:[] };
     const reasons = reasonMap[name] || [];
-    const ruleScore = reasons.reduce((s,r)=> s + (r.sign==='+'? r.weight : -r.weight), 0);
+const ruleScore = reasons.reduce((s,r)=> s + (r.sign==='+'? r.weight : -r.weight), 0);
 
-    const emp = useEmpiricalRanking ? (empiricalScore[name]||0) : 0;
-    const empNorm = emp>0 ? (emp/10)*1.8 : 0; // 実績は最大+1.8程度寄与
+// プロファイル適合度（余弦類似っぽい簡易スコア）
+const prof = DRIPPER_PROFILE[name] || {clarity:.5,body:.5,oil:.3,speed:.5,immersion:.5};
+const dot = (
+  prof.clarity*target.clarity + prof.body*target.body + prof.oil*target.oil +
+  prof.speed*target.speed + prof.immersion*target.immersion
+);
+const normA = Math.sqrt(prof.clarity**2+prof.body**2+prof.oil**2+prof.speed**2+prof.immersion**2);
+const normB = Math.sqrt(target.clarity**2+target.body**2+target.oil**2+target.speed**2+target.immersion**2);
+const profCos = (normA && normB) ? (dot/(normA*normB)) : 0.5;       // だいたい 0..1
+const profScore = (profCos - 0.5) * 2.0;                            // -1..+1 に正規化
 
-    const score = Math.round((ruleScore + empNorm) * 100)/100;
+// 実績寄与（最大 +1.8）
+const emp = useEmpiricalRanking ? (empiricalScore[name]||0) : 0;
+const empNorm = emp>0 ? (emp/10)*1.8 : 0;
+
+// 合成：ルール ± ＋ プロファイル(±1.2) ＋ 実績
+const score = Math.round((ruleScore + profScore*1.2 + empNorm) * 100)/100;
 
     // 旧 reasons も残す（下位互換）
     const legacyReasons = [
@@ -774,6 +820,11 @@ const allDrippersOrdered = useMemo(
   () => pickRecommendedDrippers({ bean: selBean, beanStats, useEmpiricalRanking, limit: 'all' }),
   [selBean, beanStats?.by_method, useEmpiricalRanking]
 );
+  // ★ 追加：TOP5を全体から除外
+const allDrippersExceptTop = useMemo(()=>{
+  const topNames = new Set(recommendedDrippers.map(d=>d.name));
+  return (allDrippersOrdered || []).filter(d=> !topNames.has(d.name));
+}, [allDrippersOrdered, recommendedDrippers]);
   
   const showOrDash = (cond:any, val:any, dashWhenBean?:string)=> cond ? (val ?? '—') : (dashWhenBean ?? '--')
   const isUnknown = (v?: any) => {
@@ -1417,10 +1468,10 @@ const splitForNiceRows = (nodes: React.ReactNode[]) => {
       {allDrippersOrdered?.length>0 && (
         <div className="mt-3">
           <AllDrippersSection
-            items={allDrippersOrdered as any}
-            showEmpiricalReasons={showEmpiricalReasons}
-            onPick={(name)=> handle('dripper', name)}
-          />
+  items={allDrippersExceptTop as any}   // ← TOP5を除いた配列に
+  showEmpiricalReasons={showEmpiricalReasons}
+  onPick={(name)=> handle('dripper', name)}
+/>
         </div>
       )}
     </>
@@ -1649,7 +1700,7 @@ const splitForNiceRows = (nodes: React.ReactNode[]) => {
           })()}
         </div>
 
-        <ChartFrame aspect={1}>
+       <ChartFrame aspect={0.85} className="max-h-[220px] sm:max-h-[200px]">
   <RadarChart data={[
     {subject:'クリーンさ', value: Number(form.ratings?.clean)||0},
     {subject:'風味',       value: Number(form.ratings?.flavor)||0},
@@ -1658,11 +1709,11 @@ const splitForNiceRows = (nodes: React.ReactNode[]) => {
     {subject:'甘味',       value: Number(form.ratings?.sweetness)||0},
     {subject:'コク',       value: Number(form.ratings?.body)||0},
     {subject:'後味',       value: Number(form.ratings?.aftertaste)||0},
-  ]}>
+  ]} margin={{ top: 4, right: 4, bottom: 4, left: 4 }}>
     <PolarGrid />
-    <PolarAngleAxis dataKey="subject" />
-    <PolarRadiusAxis angle={30} domain={[0,10]} />
-    <Radar name="now" dataKey="value" fillOpacity={0.3} />
+    <PolarAngleAxis dataKey="subject" tick={{ fontSize: 10 }} />
+    <PolarRadiusAxis angle={30} domain={[0,10]} tick={{ fontSize: 9 }} />
+    <Radar name="now" dataKey="value" fillOpacity={0.28} />
     <Tooltip />
   </RadarChart>
 </ChartFrame>
@@ -1717,17 +1768,10 @@ const AllDrippersSection: React.FC<{
   showEmpiricalReasons: boolean;
   onPick: (name:string)=>void;
 }> = ({ items, showEmpiricalReasons, onPick }) => {
-  const [showDesc, setShowDesc] = React.useState(true);
   return (
     <div className="border rounded">
       <div className="flex items-center justify-between px-2 py-1 bg-gray-50">
         <div className="text-xs font-semibold">全ドリッパー（おすすめ順）</div>
-        <div className="flex items-center gap-3 text-[11px]">
-          <label className="inline-flex items-center gap-1">
-            <input type="checkbox" checked={showDesc} onChange={()=>setShowDesc(v=>!v)} />
-            説明
-          </label>
-        </div>
       </div>
 
       <ul className="p-2 grid gap-2 [grid-template-columns:repeat(auto-fit,minmax(240px,1fr))]">
@@ -1742,7 +1786,7 @@ const AllDrippersSection: React.FC<{
                 <span className="ml-auto text-[11px] px-1.5 py-0.5 rounded border bg-gray-50">総合 {d.score}</span>
               </div>
 
-              {showDesc && <p className="mt-1 text-[12px] leading-5 text-gray-800">{d.desc}</p>}
+              <p className="mt-1 text-[12px] leading-5 text-gray-800">{d.desc}</p>
 
               {/* 固有特性（灰） */}
               {d.tags?.length>0 && (
