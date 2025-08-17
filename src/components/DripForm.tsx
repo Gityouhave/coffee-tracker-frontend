@@ -290,8 +290,10 @@ export function pickRecommendedDrippers(args:{
   defaults.forEach(add);
 
     const limit = (args?.limit ?? 5);
-  const names = (limit === 'all') ? merged
-                : merged.slice(0, Math.max(0, Number(limit) || 0));
+  const names = (limit === 'all')
+    // おすすめ順 merged に、未掲載の全ドリッパーを後ろから補完
+    ? [...merged, ...Object.keys(DRIPPER_DETAILS).filter(n => !merged.includes(n))]
+    : merged.slice(0, Math.max(0, Number(limit) || 0));
   return names.map(name=>{
     const d = DRIPPER_DETAILS[name] || {short:'—',desc:'—',tags:[]};
     return { name, short:d.short, desc:d.desc, tags:d.tags, reasons:Array.from(reasonMap[name] || []) };
@@ -359,6 +361,7 @@ const nearRoastSet = (level?: string|null) => {
 export function DripForm({API, beans, onSaved}:{API:string; beans:any[]; onSaved:()=>void}){
   const [form,setForm] = useState<any>({ ratings:{} })
   const [derive, setDerive] = useState<any>(null)
+  const [openAllDrippers, setOpenAllDrippers] = useState(false);
   const [beanStats, setBeanStats] = useState<any>(null)
   const [dripDate, setDripDate] = useState<string>(
     new Date().toISOString().slice(0, 10)
@@ -1320,10 +1323,12 @@ const splitForNiceRows = (nodes: React.ReactNode[]) => {
       items={allDrippersOrdered}
       showEmpiricalReasons={showEmpiricalReasons}
       onPick={(name)=> handle('dripper', name)}
+      open={openAllDrippers}
+      onOpenChange={setOpenAllDrippers}
     />
   </div>
 )}
-
+ {!openAllDrippers && (
   <ul className="mt-2 space-y-2">
     {recommendedDrippers && recommendedDrippers.length > 0 ? (
       recommendedDrippers.map((d) => {
@@ -1360,6 +1365,7 @@ const splitForNiceRows = (nodes: React.ReactNode[]) => {
       <li>—</li>
     )}
   </ul>
+  )}
 
   <select
     className="border rounded p-2 w-full mt-2"
@@ -1643,8 +1649,9 @@ const AllDrippersSection: React.FC<{
   items: { name:string; short:string; desc:string; tags:string[]; reasons:string[] }[];
   showEmpiricalReasons: boolean;
   onPick: (name:string)=>void;
-}> = ({ items, showEmpiricalReasons, onPick }) => {
-  const [open, setOpen] = React.useState(false);
+  open: boolean;
+  onOpenChange: (next:boolean)=>void;
++}> = ({ items, showEmpiricalReasons, onPick, open, onOpenChange }) => {
   const [compact, setCompact] = React.useState(true);     // 省スペース表示
   const [showDesc, setShowDesc] = React.useState(true);   // 説明テキスト表示
   return (
@@ -1662,7 +1669,7 @@ const AllDrippersSection: React.FC<{
           </label>
           <button
             type="button"
-            onClick={()=>setOpen(o=>!o)}
+            onClick={()=>onOpenChange(!open)}
             className="px-2 py-0.5 rounded border bg-white hover:bg-gray-50"
           >
             {open ? '閉じる' : '表示'}
