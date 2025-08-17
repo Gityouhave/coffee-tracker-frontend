@@ -1929,7 +1929,7 @@ const AllDrippersSection: React.FC<{
   }>;
   showEmpiricalReasons: boolean;
   onPick: (name:string)=>void;
-}> = ({ items, showEmpiricalReasons, onPick }) => {
+}> = ({ bean, items, showEmpiricalReasons, onPick }) => {
   return (
     <div className="border rounded">
       <div className="flex items-center justify-between px-2 py-1 bg-gray-50">
