@@ -1,7 +1,7 @@
 // src/components/DripForm.tsx
 import React, { useEffect, useMemo, useState } from 'react'
 import {
-  ResponsiveContainer, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend,
+  ResponsiveContainer, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip,
   RadarChart, PolarGrid, PolarAngleAxis, PolarRadiusAxis, Radar,
   ScatterChart, Scatter
 } from 'recharts'
@@ -1282,7 +1282,7 @@ const splitForNiceRows = (nodes: React.ReactNode[]) => {
               <ChartFrame aspect={2.4} className="max-h-[180px]">
    <ScatterChart margin={{ top: 4, right: 8, bottom: 4, left: 0 }}>
     <CartesianGrid />
-    <XAxis dataKey="_deltas.time_delta" name="timeΔ(s)" tick={{ fontSize: 10 }} />tick={{ fontSize: 10 }} />
+    <XAxis dataKey="_deltas.time_delta" name="timeΔ(s)" tick={{ fontSize: 10 }} />
      <YAxis dataKey={yAccessor.key} name={yAccessor.label} tick={{ fontSize: 10 }} />
     <Tooltip />
     <Scatter name="drips" data={beanDrips} shape="circle" r={2} />
