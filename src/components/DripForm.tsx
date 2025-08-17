@@ -232,7 +232,126 @@ const DRIPPER_DETAILS: Record<string, DripperDetail> = {
     desc:'ステンレスの滴下。じんわり濃度が上がり甘苦を濃縮。',
     tags:['金属フィルタ','滴下','濃度高め'] },
 };
+// 各ドリッパーの強み/弱み と 最適手法（プリセット）
+// howto: 粒度(6段階), 温度の目安(℃), 時間の目安(mm:ss), 注湯の要点
+type DripperKnowhow = {
+  pros: string[];
+  cons: string[];
+  howto: { grindGroup: '粗'|'中粗'|'中'|'中細'|'細'|'極細'; tempC?: number; time?: string; pour?: string; ratioHint?: string };
+};
+const DRIPPER_KNOWHOW: Record<string, DripperKnowhow> = {
+  'ハリオ': {
+    pros: ['清澄感と香りの伸び','軽快～シャープな輪郭'],
+    cons: ['重厚/発酵系だと細くなりやすい'],
+    howto: { grindGroup:'中細', tempC:86, time:'2:20', pour:'センター主体→細かめパルス', ratioHint:'1:15〜1:16' }
+  },
+  'フラワー': {
+    pros: ['ガス抜け良好でアロマ立ち','浅〜中浅で華やか'],
+    cons: ['深煎りはキレ過多になりがち'],
+    howto: { grindGroup:'中細', tempC:86, time:'2:30', pour:'中心やや外→リブ沿いを避けて薄く広く', ratioHint:'1:15.5' }
+  },
+  'カリタウェーブ': {
+    pros: ['平底で均一抽出','バランスがまとまりやすい'],
+    cons: ['ピークの立ち上がりはやや穏やか'],
+    howto: { grindGroup:'中', tempC:84, time:'2:40', pour:'3投・フラット維持', ratioHint:'1:15〜1:16' }
+  },
+  'コーノ': {
+    pros: ['甘みと質感','とろみのある口当たり'],
+    cons: ['浅煎り×清澄狙いには鈍重'],
+    howto: { grindGroup:'中', tempC:84, time:'2:30', pour:'序盤浸漬寄り→後半やや細口', ratioHint:'1:15' }
+  },
+  'クリスタル': {
+    pros: ['超クリーン','微粉の影響を最小化'],
+    cons: ['重厚産地だと細さが出やすい'],
+    howto: { grindGroup:'中細', tempC:85, time:'2:20', pour:'薄く速く・湯止め早め', ratioHint:'1:15.5' }
+  },
+  'ブルーボトル': {
+    pros: ['流速やや速で軽快','素直に整う'],
+    cons: ['厚み狙いだと軽い'],
+    howto: { grindGroup:'中細', tempC:85, time:'2:15', pour:'中心主体でスッと落とす', ratioHint:'1:15.5' }
+  },
+  'クレバー': {
+    pros: ['再現性と甘み/ボディ','発酵/ナチュラルの丸め'],
+    cons: ['過抽出気味にすると鈍る'],
+    howto: { grindGroup:'中粗', tempC:82, time:'3:00', pour:'全量浸漬→ドロー', ratioHint:'1:15' }
+  },
+  'ハリオスイッチ': {
+    pros: ['甘み×クリアの両立','幅広い調整幅'],
+    cons: ['設計が甘いとどっちつかず'],
+    howto: { grindGroup:'中', tempC:83, time:'2:40', pour:'浸漬1:00→開放', ratioHint:'1:15' }
+  },
+  'フレンチプレス': {
+    pros: ['オイル感と重厚ボディ','素材感がダイレクト'],
+    cons: ['清澄狙いには不向き'],
+    howto: { grindGroup:'粗', tempC:80, time:'4:00', pour:'全量注湯・攪拌控えめ', ratioHint:'1:14' }
+  },
+  'ネル': {
+    pros: ['丸みと余韻','深煎りの甘苦をふくよかに'],
+    cons: ['管理が必要・軽快さは出にくい'],
+    howto: { grindGroup:'中粗', tempC:80, time:'3:30', pour:'低速で面を作る', ratioHint:'1:14' }
+  },
+  'エアロプレス': {
+    pros: ['可変性が高い','小ロット検証に最適'],
+    cons: ['設計依存度が高くブレやすい'],
+    howto: { grindGroup:'中', tempC:82, time:'1:45', pour:'インバート推奨・軽く攪拌', ratioHint:'1:12〜1:15' }
+  },
+  '水出し': {
+    pros: ['低酸・まろやか','渋みが出にくい'],
+    cons: ['香りの立ち上がりは弱い'],
+    howto: { grindGroup:'中粗', tempC: -1, time:'8:00:00', pour:'浸漬(冷蔵)', ratioHint:'1:10〜1:12' }
+  },
+  'サイフォン': {
+    pros: ['香り×透明感の両立','クラシックな質感'],
+    cons: ['器具・手間が大きい'],
+    howto: { grindGroup:'中', tempC:90, time:'1:30', pour:'攪拌少なめ', ratioHint:'1:15' }
+  },
+  'フィン': {
+    pros: ['濃度をじんわり上げられる','甘苦の凝縮'],
+    cons: ['再現性に慣れが必要'],
+    howto: { grindGroup:'中', tempC:83, time:'3:30', pour:'滴下＝詰めすぎ注意', ratioHint:'1:12〜1:14' }
+  },
+  'エスプレッソ': {
+    pros: ['凝縮・厚み・余韻'],
+    cons: ['設計難度が高い'],
+    howto: { grindGroup:'極細', tempC:93, time:'0:30', pour:'9bar基準', ratioHint:'1:2' }
+  },
+  'モカポット': {
+    pros: ['濃厚・エスプレッソ風'],
+    cons: ['苦味が立ちやすい'],
+    howto: { grindGroup:'細', tempC: -1, time:'—', pour:'弱火でゆっくり', ratioHint:'—' }
+  },
+};
+// 説明欄（desc）の直下に強み/弱み/最適手法を出すレンダラ
+const DripperExplainer: React.FC<{name:string; bean:any}> = ({name, bean})=>{
+  const k = DRIPPER_KNOWHOW[name];
+  if(!k) return null;
 
+  // 豆側の推奨（焙煎度・粒度から）
+  const rec = recommendForDrip({ roast_level: bean?.roast_level, derive: null, label20: null });
+
+  const t = (k.howto.tempC ?? rec.recTemp);
+  const s = secToMMSS(k.howto.time ? (()=>{
+    const [mm,ss] = k.howto.time.split(':').map(Number);
+    return (mm??0)*60 + (ss??0);
+  })() : (rec.recTime ?? 0)) || '—';
+
+  return (
+    <div className="mt-1.5 space-y-1">
+      {/* 強み/弱み */}
+      <div className="flex flex-wrap gap-1">
+        {k.pros.map((p,i)=>(<span key={'p'+i} className="text-[10px] px-1.5 py-0.5 rounded border bg-green-50 text-green-700">＋ {p}</span>))}
+        {k.cons.map((c,i)=>(<span key={'c'+i} className="text-[10px] px-1.5 py-0.5 rounded border bg-red-50 text-red-700">− {c}</span>))}
+      </div>
+      {/* 最適手法（要点） */}
+      <div className="text-[12px] leading-5 text-gray-800">
+        <div>最適手法：粒度 <b>{k.howto.grindGroup}</b> ／ 目安温度 <b>{Number.isFinite(t)?`${t}℃`:'—'}</b> ／ 目安時間 <b>{s}</b></div>
+        <div className="text-[11px] text-gray-600">
+          {k.howto.pour ? `注湯：${k.howto.pour}` : ''} {k.howto.ratioHint ? `／ レシオ目安：${k.howto.ratioHint}` : ''}
+        </div>
+      </div>
+    </div>
+  );
+};
 // ドリッパーの物性プロファイル（0..1）
 const DRIPPER_PROFILE: Record<string, {clarity:number; body:number; oil:number; speed:number; immersion:number}> = {
   'ハリオ':        { clarity:0.9,  body:0.3,  oil:0.1,  speed:0.7,  immersion:0.1 },
@@ -414,17 +533,11 @@ const empNorm = emp>0 ? (emp/10)*1.8 : 0;
 const score = Math.round((ruleScore + profScore*1.2 + empNorm) * 100)/100;
 
     // 旧 reasons も残す（下位互換）
-    const legacyReasons = [
-      ...(byMethod.find(x=>x.dripper===name)
+   const legacyReasons = (
+      byMethod.find(x=>x.dripper===name)
         ? [`実績: 平均${(byMethod.find(x=>x.dripper===name)!.avg_overall).toFixed(1)}（n=${byMethod.find(x=>x.dripper===name)!.count||0}）`]
-        : []),
-      ...reasons
-        .filter(r=>r.sign==='+')
-        .map(r=>`＋ ${r.label}`),
-      ...reasons
-        .filter(r=>r.sign==='-')
-        .map(r=>`− ${r.label}`),
-    ];
+        : []
+    );
 
     const pick: DripPick & {score:number; rank:number; reasons2:Reason[]} = {
       name, short:d.short, desc:d.desc, tags:d.tags, reasons: legacyReasons, reasons2: reasons, score, rank: 0
@@ -546,8 +659,8 @@ type RadarItemKeyExt =
   | 'thisBeanWorst'|'sameRoastWorst'|'originNearWorst'
   | 'average'|'previous';
 const [showCharts, setShowCharts] = useState<Record<RadarItemKeyExt, boolean>>({
-  thisBean: true, sameRoast: true, originNear: true,
-  thisBeanWorst: true, sameRoastWorst: true, originNearWorst: true,  // ← 追加
+ thisBean: true, sameRoast: true, originNear: true,
+  thisBeanWorst: false, sameRoastWorst: false, originNearWorst: false,
   average: false, previous: false,
 });
   
@@ -870,8 +983,8 @@ const allDrippersOrdered = useMemo(
 );
   // ★ 追加：TOP5を全体から除外
 const allDrippersExceptTop = useMemo(()=>{
-  const topNames = new Set(recommendedDrippers.map(d=>d.name));
-  return (allDrippersOrdered || []).filter(d=> !topNames.has(d.name));
+  const topNames = new Set(recommendedDrippers.map(d=> String(d.name||'').trim()));
+ return (allDrippersOrdered || []).filter(d=> !topNames.has(String(d.name||'').trim()));
 }, [allDrippersOrdered, recommendedDrippers]);
   
   const showOrDash = (cond:any, val:any, dashWhenBean?:string)=> cond ? (val ?? '—') : (dashWhenBean ?? '--')
@@ -1482,7 +1595,7 @@ const splitForNiceRows = (nodes: React.ReactNode[]) => {
               <span className="ml-auto text-[11px] px-1.5 py-0.5 rounded border bg-gray-50">総合 {d.score}</span>
             </div>
             <p className="mt-1 text-[12px] leading-5 text-gray-800">{d.desc}</p>
-
+            <DripperExplainer name={d.name} bean={selBean} />
             {/* ドリッパー固有の特徴（灰） */}
             {d.tags?.length>0 && (
               <div className="mt-1.5 flex flex-wrap gap-1">
@@ -1515,8 +1628,9 @@ const splitForNiceRows = (nodes: React.ReactNode[]) => {
       {/* 全件（同じrankをそのまま表示。ダブりではなく“統一”） */}
       {allDrippersOrdered?.length>0 && (
         <div className="mt-3">
-          <AllDrippersSection
-  items={allDrippersExceptTop as any}   // ← TOP5を除いた配列に
+         <AllDrippersSection
+   bean={selBean}
+    items={allDrippersExceptTop as any}
   showEmpiricalReasons={showEmpiricalReasons}
   onPick={(name)=> handle('dripper', name)}
 />
@@ -1808,7 +1922,7 @@ const splitForNiceRows = (nodes: React.ReactNode[]) => {
 
 // ランキングNo.常時・正負色分け・総合点バッジ表示版
 const AllDrippersSection: React.FC<{
-  items: Array<{
+  bean:any; items: Array<{
     name:string; short:string; desc:string; tags:string[];
     reasons:string[]; score:number; rank:number;
     reasons2: {label:string; sign:'+'|'-'; weight:number}[];
@@ -1824,7 +1938,7 @@ const AllDrippersSection: React.FC<{
 
       <ul className="p-2 grid gap-2 [grid-template-columns:repeat(auto-fit,minmax(240px,1fr))]">
         {items.map((d)=> {
-          const legacy = (d.reasons||[]).filter(r => showEmpiricalReasons ? true : !String(r).startsWith('実績:'));
+          const empiricalTags = (d.reasons||[]).filter(r => String(r).startsWith('実績:'));
           return (
             <li key={d.name} className="border rounded bg-white p-3">
               <div className="flex items-baseline gap-2">
@@ -1835,7 +1949,7 @@ const AllDrippersSection: React.FC<{
               </div>
 
               <p className="mt-1 text-[12px] leading-5 text-gray-800">{d.desc}</p>
-
+              <DripperExplainer name={d.name} bean={bean} />
               {/* 固有特性（灰） */}
               {d.tags?.length>0 && (
                 <div className="mt-1.5 flex flex-wrap gap-1">
@@ -1862,9 +1976,9 @@ const AllDrippersSection: React.FC<{
               )}
 
               {/* 実績タグ（任意表示） */}
-              {legacy.length>0 && showEmpiricalReasons && (
+      {empiricalTags.length>0 && showEmpiricalReasons && (
                 <div className="mt-1.5 flex flex-wrap gap-1">
-                  {legacy.map((r,i)=>(
+     {empiricalTags.map((r,i)=>(
                     <span key={i} className="text-[10px] px-1 py-0.5 rounded bg-blue-50 border text-blue-700">{r}</span>
                   ))}
                 </div>
