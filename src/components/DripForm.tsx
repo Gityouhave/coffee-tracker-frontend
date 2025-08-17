@@ -236,7 +236,7 @@ const DRIPPER_DETAILS: Record<string, DripperDetail> = {
 type DripPick = { name: string; short: string; desc: string; tags: string[]; reasons: string[] };
 
 export function pickRecommendedDrippers(args:{
-  bean?:any; beanStats?:any|null; useEmpiricalRanking?: boolean;
+  bean?:any; beanStats?:any|null; useEmpiricalRanking?: boolean; limit?: number|'all';
 }): DripPick[] {
   const { bean, beanStats, useEmpiricalRanking = true } = args || {};
   const roast   = String(bean?.roast_level||'');
@@ -289,7 +289,10 @@ export function pickRecommendedDrippers(args:{
   else                     { ruleCands.forEach(add);     empiricalNames.forEach(add); }
   defaults.forEach(add);
 
-  return merged.slice(0,5).map(name=>{
+    const limit = (args?.limit ?? 5);
+  const names = (limit === 'all') ? merged
+                : merged.slice(0, Math.max(0, Number(limit) || 0));
+  return names.map(name=>{
     const d = DRIPPER_DETAILS[name] || {short:'—',desc:'—',tags:[]};
     return { name, short:d.short, desc:d.desc, tags:d.tags, reasons:Array.from(reasonMap[name] || []) };
   });
@@ -714,6 +717,11 @@ const toggleChart = (k: RadarItemKeyExt) => setShowCharts(s => ({ ...s, [k]: !s[
   // 推奨ドリッパーTOP5（実績→ルール）
   const recommendedDrippers = useMemo(
   () => pickRecommendedDrippers({ bean: selBean, beanStats, useEmpiricalRanking }),
+  [selBean, beanStats?.by_method, useEmpiricalRanking]
+);
+  // 全ドリッパー（おすすめ順・全件）
+const allDrippersOrdered = useMemo(
+  () => pickRecommendedDrippers({ bean: selBean, beanStats, useEmpiricalRanking, limit: 'all' }),
   [selBean, beanStats?.by_method, useEmpiricalRanking]
 );
   
@@ -1274,7 +1282,7 @@ const splitForNiceRows = (nodes: React.ReactNode[]) => {
               <ChartFrame aspect={2.4} className="max-h-[180px]">
    <ScatterChart margin={{ top: 4, right: 8, bottom: 4, left: 0 }}>
     <CartesianGrid />
-    <XAxis dataKey="_deltas.temp_delta" name="tempΔ(°C)" tick={{ fontSize: 10 }} />
+    <XAxis dataKey="_deltas.time_delta" name="timeΔ(s)" tick={{ fontSize: 10 }} />tick={{ fontSize: 10 }} />
      <YAxis dataKey={yAccessor.key} name={yAccessor.label} tick={{ fontSize: 10 }} />
     <Tooltip />
     <Scatter name="drips" data={beanDrips} shape="circle" r={2} />
@@ -1304,6 +1312,17 @@ const splitForNiceRows = (nodes: React.ReactNode[]) => {
       </label>
     </div>
   </div>
+         {/* --- 全ドリッパー（おすすめ順・折りたたみ） --- */}
+{allDrippersOrdered && allDrippersOrdered.length > 0 && (
+  <div className="mt-3">
+    {/* 開閉 + 表示オプション */}
+    <AllDrippersSection
+      items={allDrippersOrdered}
+      showEmpiricalReasons={showEmpiricalReasons}
+      onPick={(name)=> handle('dripper', name)}
+    />
+  </div>
+)}
 
   <ul className="mt-2 space-y-2">
     {recommendedDrippers && recommendedDrippers.length > 0 ? (
@@ -1619,5 +1638,95 @@ const splitForNiceRows = (nodes: React.ReactNode[]) => {
     </form>
   )
 }
+// コンパクトな“角カード”で全件を表示する折りたたみセクション
+const AllDrippersSection: React.FC<{
+  items: { name:string; short:string; desc:string; tags:string[]; reasons:string[] }[];
+  showEmpiricalReasons: boolean;
+  onPick: (name:string)=>void;
+}> = ({ items, showEmpiricalReasons, onPick }) => {
+  const [open, setOpen] = React.useState(false);
+  const [compact, setCompact] = React.useState(true);     // 省スペース表示
+  const [showDesc, setShowDesc] = React.useState(true);   // 説明テキスト表示
+  return (
+    <div className="border rounded">
+      <div className="flex items-center justify-between px-2 py-1 bg-gray-50">
+        <div className="text-xs font-semibold">全ドリッパー（おすすめ順）</div>
+        <div className="flex items-center gap-3 text-[11px]">
+          <label className="inline-flex items-center gap-1">
+            <input type="checkbox" checked={compact} onChange={()=>setCompact(v=>!v)} />
+            コンパクト
+          </label>
+          <label className="inline-flex items-center gap-1">
+            <input type="checkbox" checked={showDesc} onChange={()=>setShowDesc(v=>!v)} />
+            説明
+          </label>
+          <button
+            type="button"
+            onClick={()=>setOpen(o=>!o)}
+            className="px-2 py-0.5 rounded border bg-white hover:bg-gray-50"
+          >
+            {open ? '閉じる' : '表示'}
+          </button>
+        </div>
+      </div>
 
+      {open && (
+        <ul className="p-2 grid gap-2
+                       [grid-template-columns:repeat(auto-fit,minmax(220px,1fr))]">
+          {items.map((d)=> {
+            const reasons = (d.reasons||[]).filter(r => showEmpiricalReasons ? true : !r.startsWith('実績:'));
+            return (
+              <li key={d.name} className={`border rounded bg-white ${compact?'p-2':'p-3'}`}>
+                <div className="flex items-baseline justify-between gap-2">
+                  <div className="flex-1 min-w-0">
+                    <div className="flex flex-wrap items-baseline gap-2">
+                      <b className={`${compact?'text-sm':'text-[15px]'}`}>{d.name}</b>
+                      <span className="text-xs text-gray-600">— {d.short}</span>
+                    </div>
+                    {showDesc && (
+                      <p
+                        className="mt-1 text-[12px] leading-5 text-gray-800"
+                        style={{ display: '-webkit-box', WebkitLineClamp: compact?2:3, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}
+                      >
+                        {d.desc}
+                      </p>
+                    )}
+                  </div>
+                  <button
+                    type="button"
+                    onClick={()=> onPick(d.name)}
+                    className="shrink-0 self-start px-2 py-1 rounded border text-[11px] bg-white hover:bg-gray-50"
+                    aria-label={`${d.name} を選択`}
+                    title={`${d.name} を選択`}
+                  >
+                    選ぶ
+                  </button>
+                </div>
+
+                {d.tags?.length > 0 && (
+                  <div className="mt-1.5 flex flex-wrap gap-1">
+                    {d.tags.map((t, i) => (
+                      <span key={`tag-${d.name}-${i}`} className="text-[10px] px-1.5 py-0.5 rounded bg-gray-100 border text-gray-700">
+                        {t}
+                      </span>
+                    ))}
+                  </div>
+                )}
+                {reasons.length > 0 && (
+                  <div className="mt-1 flex flex-wrap gap-1">
+                    {reasons.map((r, i) => (
+                      <span key={`rs-${d.name}-${i}`} className="text-[10px] px-1 py-0.5 rounded bg-gray-50 border text-gray-600">
+                        {r}
+                      </span>
+                    ))}
+                  </div>
+                )}
+              </li>
+            );
+          })}
+        </ul>
+      )}
+    </div>
+  );
+};
 export default DripForm
