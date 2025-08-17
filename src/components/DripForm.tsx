@@ -1651,7 +1651,7 @@ const AllDrippersSection: React.FC<{
   onPick: (name:string)=>void;
   open: boolean;
   onOpenChange: (next:boolean)=>void;
-+}> = ({ items, showEmpiricalReasons, onPick, open, onOpenChange }) => {
+}> = ({ items, showEmpiricalReasons, onPick, open, onOpenChange }) => {
   const [compact, setCompact] = React.useState(true);     // 省スペース表示
   const [showDesc, setShowDesc] = React.useState(true);   // 説明テキスト表示
   return (
