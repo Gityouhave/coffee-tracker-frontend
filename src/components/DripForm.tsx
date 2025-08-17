@@ -327,19 +327,67 @@ export function pickRecommendedDrippers(args:{
     ['ネル','フレンチプレス','クレバー','ハリオスイッチ'].forEach(n=> add(n,'産地: 重心低め/オイル感が映える', +1.0));
     ['クリスタル'].forEach(n=> add(n,'産地: 重厚産地×超クリアは細さが出やすい', -0.8));
   }
+  // --- 追加の相性（明示的な＋/−の根拠） ---
+// 浅め・ウォッシュト・高香りに対する加圧/金属/重厚器具のマイナス
+if (light || isWashed || aromaOrigin.test(origin)) {
+  ['エスプレッソ','モカポット','フィン','フレンチプレス','ネル'].forEach(n =>
+    add(n,'清澄・軽快ターゲットでは重厚/オイルが出過ぎやすい', -1.0));
+}
 
-  // 豆から推定するターゲット（何を伸ばすか）
+// 深煎り・重厚・発酵/ナチュラルでの“軽快・超クリア”器具のマイナス強化
+if (dark || heavyOrigin.test(origin) || isFerment || isNatural) {
+  ['ハリオ','フラワー','クリスタル','ブルーボトル'].forEach(n =>
+    add(n,'重心を下げたい局面でクリア特化は細くなりやすい', -0.9));
+}
+
+// 水出し：酸を抑えて丸めたい（浅〜中浅/ナチュラルにプラス）
+if (light || isNatural) {
+  add('水出し','低温長時間で酸を穏やかにし甘みを前に出せる', +1.0);
+}
+// 水出し：重厚/深煎りの“香り立ち”目的ではマイナス
+if (dark || heavyOrigin.test(origin)) {
+  add('水出し','ホットの立体感・香りの立ち上がりを重視するなら不利', -0.6);
+}
+
+// サイフォン：ウォッシュト/高香りでの両立（香り×クリーン）を明示加点
+if (isWashed || aromaOrigin.test(origin)) {
+  add('サイフォン','減圧ろ過で香りと透明感の両立', +0.9);
+}
+
+// エアロプレス：発酵/ナチュラルを“丸める/締める”自由度を加点
+if (isFerment || isNatural) {
+  add('エアロプレス','攪拌/圧力/ペーパーor金属の選択で丸めやすい', +0.8);
+}
+
+// エスプレッソ/モカポット：深煎り・重厚・発酵で明示加点（凝縮）
+if (dark || heavyOrigin.test(origin) || isFerment) {
+  ['エスプレッソ','モカポット'].forEach(n =>
+    add(n,'高圧・高濃度で甘苦の厚みを最優先できる', +1.1));
+}
+
+// 豆から推定するターゲット（何を伸ばすか）
 const target = { clarity:0.5, body:0.5, oil:0.3, speed:0.5, immersion:0.4 };
-// 浅め・高香り or ウォッシュト → clarity寄り
+
+// 浅め・高香り or ウォッシュト → clarity寄り & 速め/低浸漬
 if (light || isWashed || /(エチオピア|ケニア|ルワンダ|ブルンジ)/.test(origin)) {
-  target.clarity += 0.25; target.body -= 0.1; target.oil -= 0.15;
+  target.clarity   += 0.25;
+  target.body      -= 0.10;
+  target.oil       -= 0.15;
+  target.speed     += 0.15; // ← 追加
+  target.immersion -= 0.10; // ← 追加
 }
-// 深煎り・重厚産地・発酵/ナチュラル → body/oil寄り
+
+// 深煎り・重厚産地・発酵/ナチュラル → body/oil寄り & 遅め/高浸漬
 if (dark || /(インドネシア|スマトラ|マンデリン|ブラジル)/.test(origin) || isFerment || isNatural) {
-  target.body += 0.25; target.oil += 0.2; target.clarity -= 0.1;
+  target.body      += 0.25;
+  target.oil       += 0.20;
+  target.clarity   -= 0.10;
+  target.speed     -= 0.15; // ← 追加
+  target.immersion += 0.15; // ← 追加
 }
+
 // ハニーはやや浸漬寄りが甘みを乗せやすい
-if (isHoney) target.immersion += 0.1;
+if (isHoney) target.immersion += 0.10;
 
   // スコア集計
   const items = baseList.map(name=>{
