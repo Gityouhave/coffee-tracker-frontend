@@ -45,7 +45,7 @@ const wilsonLowerBound = (mean0to10:number, n:number, z=1.96)=>{
   if (!Number.isFinite(n) || n<=0) return 0;
   const denom = 1 + (z*z)/n;
   const centre = p + (z*z)/(2*n);
-  const margin = z*Math.sqrt((p*(p-1)+(z*z)/(4*n))/n); // p*(1-p) と同値
+const margin = z * Math.sqrt((p*(1 - p) + (z*z)/(4*n)) / n);
   return clamp((centre - margin)/denom, 0, 1);
 };
 
@@ -76,10 +76,18 @@ const grindGroup6 = (label20?:string|null)=>{
 
 const recommendForDrip = (d:any)=>{
   const roast = d?.roast_level ?? 'シティ';
-  const recTemp = ROAST_TEMP[roast] ?? 82.5;
+  let recTemp = ROAST_TEMP[roast] ?? 82.5;
   const g20 = grind20(d);
   const group = grindGroup6(g20);
-  const recTime = group ? GRIND_TIME[group] : undefined;
+  let recTime = group ? GRIND_TIME[group] : undefined;
+
+  const name = d?.dripper ? String(d.dripper) : '';
+  const r = name ? (DRIPPER_RUNTIME as any)[name] : undefined;
+  if (r) {
+    if (Number.isFinite(r?.tempOffset)) recTemp += r.tempOffset as number;
+    if (Number.isFinite(r?.timeFactor) && Number.isFinite(recTime))
+      recTime = Math.round((recTime as number) * (r.timeFactor as number));
+  }
   return { recTemp, recTime };
 };
 
@@ -555,10 +563,20 @@ const DripperExplainer: React.FC<{name:string; bean:any}> = ({name, bean})=>{
   const rec = recommendForDrip({ roast_level: bean?.roast_level, derive: null, label20: null });
 
   const t = (k.howto.tempC ?? rec.recTemp);
-  const s = secToMMSS(k.howto.time ? (()=>{
-    const [mm,ss] = k.howto.time.split(':').map(Number);
-    return (mm??0)*60 + (ss??0);
-  })() : (rec.recTime ?? 0)) || '—';
+  const hmsToSec = (txt:string)=>{
+  const parts = txt.split(':').map(Number);
+  if (parts.length === 3) return (parts[0]||0)*3600 + (parts[1]||0)*60 + (parts[2]||0);
+  if (parts.length === 2) return (parts[0]||0)*60 + (parts[1]||0);
+  const n = Number(txt); return Number.isFinite(n) ? n : 0;
+};
+const secToHMMSS = (s:number)=>{
+  const h = Math.floor(s/3600), m = Math.floor((s%3600)/60), ss = s%60;
+  if (h > 0) return `${h}:${String(m).padStart(2,'0')}:${String(ss).padStart(2,'0')}`;
+  return `${m}:${String(ss).padStart(2,'0')}`;
+};
+
+const baseSec = k.howto.time ? hmsToSec(k.howto.time) : (rec.recTime ?? 0);
+const s = Number.isFinite(baseSec) && baseSec>0 ? secToHMMSS(baseSec) : '—';
 
   return (
   <div className="mt-1.5 space-y-1">
@@ -605,6 +623,15 @@ const DRIPPER_PROFILE: Record<string, {clarity:number; body:number; oil:number; 
   'エスプレッソ':  { clarity:0.4,  body:1.0,  oil:0.85, speed:1.0,  immersion:0.2 },
   'モカポット':    { clarity:0.35, body:0.9,  oil:0.7,  speed:0.8,  immersion:0.2 },
   'サイフォン':    { clarity:0.8,  body:0.55, oil:0.2,  speed:0.5,  immersion:0.4 },
+};
+const DRIPPER_RUNTIME: Record<string, { timeFactor?: number; tempOffset?: number }> = {
+  'カリタウェーブ': { timeFactor: 1.10, tempOffset: -1 },
+  'クリスタル':     { timeFactor: 0.90, tempOffset: -1 },
+  'フレンチプレス': { timeFactor: 1.20, tempOffset: -2 },
+  'ネル':           { timeFactor: 1.15, tempOffset: -2 },
+  'ハリオ':         { timeFactor: 1.00, tempOffset:  0 },
+  'フラワー':       { timeFactor: 1.00, tempOffset:  0 },
+  'コーノ':         { timeFactor: 1.05, tempOffset: -1 },
 };
 
 type DripPick = { name: string; short: string; desc: string; tags: string[]; reasons: string[] };
