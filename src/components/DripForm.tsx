@@ -1616,34 +1616,17 @@ const splitForNiceRows = (nodes: React.ReactNode[]) => {
    
   </div>
 
-  {showDripperBlocks && (
-  <>
-  {listMode === 'top5' ? (
-    <DripperList
-   title="おすすめTOP5"
-   bean={selBean}
-   items={recommendedDrippers as any}
-   showEmpiricalReasons={showEmpiricalReasons}
-   onPick={(name)=> handle('dripper', name)}
- />
-     {/* 既存の <li> ... （ここに中身を戻す） */}
-   </li>
- ))}
-    </ul>
-  ) : (
-    allDrippersOrdered?.length > 0 && (
-      <div className="mt-3">
-        <AllDrippersSection
-          bean={selBean}
-          items={allDrippersOrdered as any}   // ← 全件をそのまま渡す
-          showEmpiricalReasons={showEmpiricalReasons}
-          onPick={(name)=> handle('dripper', name)}
-        />
-      </div>
-    )
-  )}
-</>
-          
+  
+{showDripperBlocks && (
+   <div className="mt-2">
+      <DripperList
+        title={listMode === 'top5' ? 'おすすめTOP5' : '全ドリッパー（おすすめ順）'}
+        bean={selBean}
+        items={(listMode === 'top5' ? recommendedDrippers : allDrippersOrdered) as any}
+        showEmpiricalReasons={showEmpiricalReasons}
+        onPick={(name)=> handle('dripper', name)}
+      />
+    </div>
   )}
 
   {/* セレクトは常に残す（表示OFFでも選べるように） */}
