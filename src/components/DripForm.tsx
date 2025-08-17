@@ -1244,47 +1244,6 @@ const splitForNiceRows = (nodes: React.ReactNode[]) => {
 
          {/* 入力群 */}
       {/* 3カラム：挽き目 / 湯温 / ドリッパー */}
-      <div className="grid grid-cols-3 gap-2">
-        {/* 挽き目 */}
-        <div>
-          <div className="text-[11px] text-gray-500 mb-1">
-            目安（焙煎度基準）：{ form.bean_id ? (
-              <>粗 {derive?.grind?.markers_for_roast?.['粗'] ?? '—'} / 中粗 {derive?.grind?.markers_for_roast?.['中粗'] ?? '—'} / 中 {derive?.grind?.markers_for_roast?.['中'] ?? '—'} / 中細 {derive?.grind?.markers_for_roast?.['中細'] ?? '—'} / 細 {derive?.grind?.markers_for_roast?.['細'] ?? '—'} / 極細 {derive?.grind?.markers_for_roast?.['極細'] ?? '—'}</>
-            ) : '--' }
-          </div>
-
-          <input
-            className="border rounded p-2 w-full"
-            placeholder="挽き目 (1~17)"
-            value={form.grind||''}
-            onChange={e=>handle('grind',e.target.value)}
-          />
-
-          <div className="text-xs text-gray-600 mt-1">
-            挽き目表記：<b>{(form.bean_id && form.grind) ? (derive?.grind?.label20 ?? '—') : '--'}</b>
-          </div>
-        </div>
-
-        {/* 湯温 */}
-        <div>
-          {/* ↑ 推奨（上） */}
-          <div className="text-xs text-gray-600 mb-1">
-            推奨湯温：{showOrDash(!!form.bean_id, derive?.temp?.recommended_c)}℃
-          </div>
-
-          <input
-            className="border rounded p-2 w-full"
-            placeholder="湯温 (℃)"
-            value={form.water_temp_c||''}
-            onChange={e=>handle('water_temp_c',e.target.value)}
-          />
-
-          {/* ↓ 差分（下） */}
-          <div className="text-xs text-gray-600 mt-1">
-            Δ：{(form.bean_id && form.water_temp_c) ? (derive?.temp?.delta_from_input ?? '—') : '--'}
-          </div>
-        </div>
-
        {/* ドリッパー */}
 <div>
   <div className="text-xs text-gray-600 mt-2">推奨ドリッパーTOP5：</div>
@@ -1344,6 +1303,47 @@ const splitForNiceRows = (nodes: React.ReactNode[]) => {
   </div>
 </div>
         </div>  
+
+      <div className="grid grid-cols-3 gap-2">
+        {/* 挽き目 */}
+        <div>
+          <div className="text-[11px] text-gray-500 mb-1">
+            目安（焙煎度基準）：{ form.bean_id ? (
+              <>粗 {derive?.grind?.markers_for_roast?.['粗'] ?? '—'} / 中粗 {derive?.grind?.markers_for_roast?.['中粗'] ?? '—'} / 中 {derive?.grind?.markers_for_roast?.['中'] ?? '—'} / 中細 {derive?.grind?.markers_for_roast?.['中細'] ?? '—'} / 細 {derive?.grind?.markers_for_roast?.['細'] ?? '—'} / 極細 {derive?.grind?.markers_for_roast?.['極細'] ?? '—'}</>
+            ) : '--' }
+          </div>
+
+          <input
+            className="border rounded p-2 w-full"
+            placeholder="挽き目 (1~17)"
+            value={form.grind||''}
+            onChange={e=>handle('grind',e.target.value)}
+          />
+
+          <div className="text-xs text-gray-600 mt-1">
+            挽き目表記：<b>{(form.bean_id && form.grind) ? (derive?.grind?.label20 ?? '—') : '--'}</b>
+          </div>
+        </div>
+
+        {/* 湯温 */}
+        <div>
+          {/* ↑ 推奨（上） */}
+          <div className="text-xs text-gray-600 mb-1">
+            推奨湯温：{showOrDash(!!form.bean_id, derive?.temp?.recommended_c)}℃
+          </div>
+
+          <input
+            className="border rounded p-2 w-full"
+            placeholder="湯温 (℃)"
+            value={form.water_temp_c||''}
+            onChange={e=>handle('water_temp_c',e.target.value)}
+          />
+
+          {/* ↓ 差分（下） */}
+          <div className="text-xs text-gray-600 mt-1">
+            Δ：{(form.bean_id && form.water_temp_c) ? (derive?.temp?.delta_from_input ?? '—') : '--'}
+          </div>
+        </div>
 
       {/* 3カラム：豆量 / 湯量 / 落ちきり量 */}
       <div className="grid grid-cols-3 gap-2">
