@@ -1619,8 +1619,16 @@ const splitForNiceRows = (nodes: React.ReactNode[]) => {
   {showDripperBlocks && (
   <>
   {listMode === 'top5' ? (
-    <ul className="mt-2 grid gap-2 [grid-template-columns:repeat(auto-fit,minmax(240px,1fr))]">
-      {recommendedDrippers.map(d => (/* 既存の <li> ... */))}
+    <DripperList
+   title="おすすめTOP5"
+   bean={selBean}
+   items={recommendedDrippers as any}
+   showEmpiricalReasons={showEmpiricalReasons}
+   onPick={(name)=> handle('dripper', name)}
+ />
+     {/* 既存の <li> ... （ここに中身を戻す） */}
+   </li>
+ ))}
     </ul>
   ) : (
     allDrippersOrdered?.length > 0 && (
