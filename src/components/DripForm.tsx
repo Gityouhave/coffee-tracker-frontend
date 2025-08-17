@@ -1007,9 +1007,16 @@ const allDrippersExceptTop = useMemo(()=>{
   
   const showOrDash = (cond:any, val:any, dashWhenBean?:string)=> cond ? (val ?? '—') : (dashWhenBean ?? '--')
   const isUnknown = (v?: any) => {
-    const s = String(v ?? '').trim()
-    return !s || s === '—' || s === '-' || s === '不明' || s.startsWith('不明')
-  }
+  const raw = String(v ?? '').trim()
+  if (!raw) return true
+  const s = raw.replace(/[()（）［］【】]/g, '')
+  return (
+    s === '—' || s === '-' || s === '--' ||
+    /^不明/.test(s) ||
+    /^未指定/.test(s) || /^未設定/.test(s) || /^指定なし/.test(s) ||
+    /^N\/A$/i.test(s)
+  )
+}
   const theoryWithValue = (theory?: any, value?: any) => {
     const t = isUnknown(theory) ? '' : String(theory)
     const v = isUnknown(value) ? '' : String(value)
@@ -1262,7 +1269,7 @@ const splitForNiceRows = (nodes: React.ReactNode[]) => {
 
         <div className="font-semibold">選択豆：{selBean?.name ?? '--'}</div>
 
-        <TheoryRow label="産地セオリー" theory={originTheoryText()} value={selBean?.origin} show={!!form.bean_id}/>
+        <TheoryRow label="産地セオリー" theory={originTheoryText()} value={''} show={!!form.bean_id}/>
         <TheoryRow
           label="精製セオリー"
           theory={derive?.theory?.process}
