@@ -33,6 +33,7 @@ const scopeTitleWorst = (s: ScopeKey) =>
   s === 'thisBean' ? '同豆ワースト'
   : s === 'sameRoast' ? '同焙煎度ワースト'
   : '産地×近焙煎度ワースト';
+const [listMode, setListMode] = useState<'top5'|'all'>('top5');
 
 // === BEGIN: pattern label helpers ===
 const grind20 = (d:any)=> d?.derive?.grind?.label20 || d?.label20 || '';
@@ -336,12 +337,18 @@ const DripperExplainer: React.FC<{name:string; bean:any}> = ({name, bean})=>{
   })() : (rec.recTime ?? 0)) || '—';
 
   return (
-    <div className="mt-1.5 space-y-1">
-      {/* 強み/弱み */}
-      <div className="flex flex-wrap gap-1">
-        {k.pros.map((p,i)=>(<span key={'p'+i} className="text-[10px] px-1.5 py-0.5 rounded border bg-green-50 text-green-700">＋ {p}</span>))}
-        {k.cons.map((c,i)=>(<span key={'c'+i} className="text-[10px] px-1.5 py-0.5 rounded border bg-red-50 text-red-700">− {c}</span>))}
-      </div>
+  <div className="flex flex-wrap gap-1">
+  {k.pros.map((p,i)=>(
+    <span key={'p'+i} className="text-[10px] px-1.5 py-0.5 rounded border bg-slate-100 text-slate-700">
+      強み {p}
+    </span>
+  ))}
+  {k.cons.map((c,i)=>(
+    <span key={'c'+i} className="text-[10px] px-1.5 py-0.5 rounded border bg-amber-50 text-amber-700">
+      注意 {c}
+    </span>
+  ))}
+</div>
       {/* 最適手法（要点） */}
       <div className="text-[12px] leading-5 text-gray-800">
         <div>最適手法：粒度 <b>{k.howto.grindGroup}</b> ／ 目安温度 <b>{Number.isFinite(t)?`${t}℃`:'—'}</b> ／ 目安時間 <b>{s}</b></div>
@@ -978,6 +985,11 @@ const toggleChart = (k: RadarItemKeyExt) => setShowCharts(s => ({ ...s, [k]: !s[
 );
   // 全ドリッパー（おすすめ順・全件）
 const allDrippersOrdered = useMemo(
+  // ▼ この直後に追加
+const dripperList = useMemo(
+  () => listMode==='top5' ? recommendedDrippers : allDrippersOrdered,
+  [listMode, recommendedDrippers, allDrippersOrdered]
+);
   () => pickRecommendedDrippers({ bean: selBean, beanStats, useEmpiricalRanking, limit: 'all' }),
   [selBean, beanStats?.by_method, useEmpiricalRanking]
 );
@@ -1563,23 +1575,39 @@ const splitForNiceRows = (nodes: React.ReactNode[]) => {
 {/* --- ドリッパー（先頭セクション） --- */}
 {/* --- ドリッパー（先頭セクション） --- */}
 <div>
-  <div className="flex items-center justify-between">
-    <div className="text-xs text-gray-600 mt-2">ドリッパー候補</div>
-    <div className="flex items-center gap-3 text-[11px]">
-      {/* ← NEW: ドリッパー自体の表示ON/OFF */}
+  
+<div className="flex items-center justify-between">
+  <div className="text-xs text-gray-600 mt-2">ドリッパー候補</div>
+  <div className="flex items-center gap-3 text-[11px]">
+    <label className="inline-flex items-center gap-1">
+      <input type="checkbox" checked={showDripperBlocks} onChange={()=>setShowDripperBlocks(v=>!v)} />
+      ドリッパー表示
+    </label>
+
+    {/* 追加：TOP5だけ / 全部 */}
+    <div className="inline-flex items-center gap-2">
+      <span className="text-gray-500">表示</span>
       <label className="inline-flex items-center gap-1">
-        <input type="checkbox" checked={showDripperBlocks} onChange={()=>setShowDripperBlocks(v=>!v)} />
-        ドリッパー表示
+        <input type="radio" name="dripperListMode" checked={listMode==='top5'} onChange={()=>setListMode('top5')} />
+        TOP5だけ
       </label>
       <label className="inline-flex items-center gap-1">
-        <input type="checkbox" checked={useEmpiricalRanking} onChange={()=>setUseEmpiricalRanking(v=>!v)} />
-        実績をランキングに反映
-      </label>
-      <label className="inline-flex items-center gap-1">
-        <input type="checkbox" checked={showEmpiricalReasons} onChange={()=>setShowEmpiricalReasons(v=>!v)} />
-        実績情報を表示
+        <input type="radio" name="dripperListMode" checked={listMode==='all'} onChange={()=>setListMode('all')} />
+        全部
       </label>
     </div>
+
+    <label className="inline-flex items-center gap-1">
+      <input type="checkbox" checked={useEmpiricalRanking} onChange={()=>setUseEmpiricalRanking(v=>!v)} />
+      実績をランキングに反映
+    </label>
+    <label className="inline-flex items-center gap-1">
+      <input type="checkbox" checked={showEmpiricalReasons} onChange={()=>setShowEmpiricalReasons(v=>!v)} />
+      実績情報を表示
+    </label>
+  </div>
+</div>
+   
   </div>
 
   {showDripperBlocks && (
@@ -1921,7 +1949,8 @@ const splitForNiceRows = (nodes: React.ReactNode[]) => {
 }
 
 // ランキングNo.常時・正負色分け・総合点バッジ表示版
-const AllDrippersSection: React.FC<{
+const DripperList: React.FC<{
+  title: string;
   bean:any; items: Array<{
     name:string; short:string; desc:string; tags:string[];
     reasons:string[]; score:number; rank:number;
@@ -1929,11 +1958,11 @@ const AllDrippersSection: React.FC<{
   }>;
   showEmpiricalReasons: boolean;
   onPick: (name:string)=>void;
-}> = ({ bean, items, showEmpiricalReasons, onPick }) => {
+}> = ({ title, bean, items, showEmpiricalReasons, onPick }) => {
   return (
     <div className="border rounded">
       <div className="flex items-center justify-between px-2 py-1 bg-gray-50">
-        <div className="text-xs font-semibold">全ドリッパー（おすすめ順）</div>
+        <div className="text-xs font-semibold">{title}</div>
       </div>
 
       <ul className="p-2 grid gap-2 [grid-template-columns:repeat(auto-fit,minmax(240px,1fr))]">
@@ -1950,7 +1979,8 @@ const AllDrippersSection: React.FC<{
 
               <p className="mt-1 text-[12px] leading-5 text-gray-800">{d.desc}</p>
               <DripperExplainer name={d.name} bean={bean} />
-              {/* 固有特性（灰） */}
+
+              {/* 固有特性 */}
               {d.tags?.length>0 && (
                 <div className="mt-1.5 flex flex-wrap gap-1">
                   {d.tags.map((t,i)=>(
@@ -1959,38 +1989,38 @@ const AllDrippersSection: React.FC<{
                 </div>
               )}
 
-              {/* 豆に基づく示唆（＋緑 / −赤） */}
+              {/* 相性（＋緑 / −赤） */}
               {d.reasons2?.length>0 && (
                 <div className="mt-1.5 flex flex-wrap gap-1">
                   {d.reasons2.map((r,i)=>(
                     <span key={i}
                       className={`text-[10px] px-1.5 py-0.5 rounded border ${
-                        r.sign==='+' ? 'bg-green-50 text-green-700' : 'bg-red-50 text-red-700'
+                        r.sign==='+' ? 'bg-green-50 text-green-700 border-green-200' : 'bg-red-50 text-red-700 border-red-200'
                       }`}
                       title={`${r.sign}${r.weight}`}
                     >
-                      {r.sign==='+'?'＋':'−'} {r.label}
+                      {r.sign==='+'?'相性＋':'相性−'} {r.label}
                     </span>
                   ))}
                 </div>
               )}
 
-              {/* 実績タグ（任意表示） */}
-      {empiricalTags.length>0 && showEmpiricalReasons && (
+              {/* 実績（任意表示） */}
+              {empiricalTags.length>0 && showEmpiricalReasons && (
                 <div className="mt-1.5 flex flex-wrap gap-1">
-     {empiricalTags.map((r,i)=>(
+                  {empiricalTags.map((r,i)=>(
                     <span key={i} className="text-[10px] px-1 py-0.5 rounded bg-blue-50 border text-blue-700">{r}</span>
                   ))}
                 </div>
               )}
 
-              <div className="mt-2">
+              <div className="mt-2 flex gap-2">
                 <button
                   type="button"
                   onClick={()=> onPick(d.name)}
                   className="px-2 py-1 rounded border text-[11px] bg-white hover:bg-gray-50"
                 >
-                  このドリッパーを選ぶ
+                  適用
                 </button>
               </div>
             </li>
