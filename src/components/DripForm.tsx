@@ -369,6 +369,7 @@ const DRIPPER_KNOWHOW: Record<string, DripperKnowhow> = {
       { origin:'エチオピア', process:'ナチュラル', roast:'浅',   flavor:'フルーティ/発酵香を華やかに' },
       { origin:'ルワンダ',   process:'ウォッシュト', roast:'浅〜中浅', flavor:'紅茶様のフローラルを伸ばす' },
       { origin:'パナマ',     process:'ウォッシュト', roast:'浅',   flavor:'明瞭なフローラル（ゲイシャ系）' },
+      { origin:'イエメン', process:'ナチュラル', roast:'浅', flavor:'レーズンの甘みとスパイス感'},
     ],
   },
   'カリタウェーブ': {
@@ -379,6 +380,7 @@ const DRIPPER_KNOWHOW: Record<string, DripperKnowhow> = {
       { origin:'グアテマラ', process:'ウォッシュト', roast:'中',     flavor:'チョコ/柑橘の均整' },
       { origin:'コロンビア', process:'ウォッシュト', roast:'中',     flavor:'ブライト＆バランス' },
       { origin:'ペルー',     process:'ウォッシュト', roast:'中〜中深', flavor:'柔らかい甘みを丸く' },
+      { origin:'ボリビア',process:'ウォッシュト', roast:'中浅', flavor:'キャラメル的甘味と程よい酸' },
     ],
   },
   'コーノ': {
@@ -389,6 +391,7 @@ const DRIPPER_KNOWHOW: Record<string, DripperKnowhow> = {
       { origin:'エルサルバドル', process:'ハニー',       roast:'中',     flavor:'蜂蜜感/粘性のある甘み' },
       { origin:'ブラジル',       process:'パルプドナチュラル', roast:'中〜中深', flavor:'ナッツ/ミルクチョコを厚めに' },
       { origin:'ニカラグア',     process:'ウォッシュト', roast:'中',     flavor:'キャラメル/カカオを滑らかに' },
+      { origin:'ホンジュラス', process:'ハニー', roast:'中', flavor:'チョコナッツと柔らかい甘み'},
     ],
   },
   'クリスタル': {
@@ -399,6 +402,7 @@ const DRIPPER_KNOWHOW: Record<string, DripperKnowhow> = {
       { origin:'エチオピア', process:'ウォッシュト', roast:'浅',   flavor:'柑橘/白花の精緻さ' },
       { origin:'パナマ',     process:'ウォッシュト', roast:'浅',   flavor:'繊細なフローラルの輪郭' },
       { origin:'コスタリカ', process:'ホワイトハニー', roast:'中浅', flavor:'明るい甘みをクリアに' },
+      { origin:'タンザニア',process:'ウォッシュト', roast:'浅〜中浅', flavor:'ブラックベリー系の果実味と酸' },
     ],
   },
   'ブルーボトル': {
@@ -409,6 +413,7 @@ const DRIPPER_KNOWHOW: Record<string, DripperKnowhow> = {
       { origin:'グアテマラ', process:'ウォッシュト', roast:'浅〜中浅', flavor:'軽快なカカオ/柑橘' },
       { origin:'ルワンダ',   process:'ウォッシュト', roast:'浅〜中浅', flavor:'紅茶様の軽やかさ' },
       { origin:'コロンビア', process:'ウォッシュト', roast:'中浅',     flavor:'明るいバランス' },
+       { origin:'DRコンゴ', process:'ウォッシュト', roast:'中', flavor:'野性味ある柑橘とハーブ節' },
     ],
   },
   'クレバー': {
@@ -439,6 +444,7 @@ const DRIPPER_KNOWHOW: Record<string, DripperKnowhow> = {
       { origin:'インドネシア（スマトラ）', process:'ウェットハル', roast:'中深〜深', flavor:'スパイス/アーシーの厚み' },
       { origin:'ブラジル',                 process:'ナチュラル',   roast:'中深',     flavor:'ナッツ/ダークチョコのボディ' },
       { origin:'エチオピア',               process:'ナチュラル',   roast:'中',       flavor:'果実味を重厚に' },
+      { origin:'パプアニューギニア', process:'ナチュラル', roast:'中深〜深', flavor:'土っぽさと甘苦の厚み'},
     ],
   },
   'ネル': {
@@ -449,6 +455,8 @@ const DRIPPER_KNOWHOW: Record<string, DripperKnowhow> = {
       { origin:'マンデリン（スマトラ）', process:'ウェットハル', roast:'深',     flavor:'重心を下げ甘苦と余韻' },
       { origin:'ブラジル',               process:'ナチュラル',   roast:'中深〜深', flavor:'丸い甘みと厚み' },
       { origin:'インド',                 process:'モンスーン',   roast:'中深',     flavor:'低酸/スパイス感をふくよかに' },
+      { origin:'ウガンダ', process:'ナチュラル',roast:'中深', flavor:'熟したベリー＋スパイスの厚み' },
+       { origin:'ラオス', process:'ナチュラル', roast:'中深', flavor:'スモーキーかつ土感の甘さ'},
     ],
   },
   'エアロプレス': {
