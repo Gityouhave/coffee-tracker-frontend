@@ -1302,7 +1302,6 @@ const splitForNiceRows = (nodes: React.ReactNode[]) => {
     ドリッパー理論：{form.dripper ? (derive?.theory?.dripper ?? '—') : '--'}
   </div>
 </div>
-        </div>  
 
       <div className="grid grid-cols-3 gap-2">
         {/* 挽き目 */}
@@ -1396,6 +1395,7 @@ const splitForNiceRows = (nodes: React.ReactNode[]) => {
           />
         </div>
       </div>
+          </div>  
 
 <div className="grid grid-cols-2 gap-2">
   {/* 抽出時間 */}
