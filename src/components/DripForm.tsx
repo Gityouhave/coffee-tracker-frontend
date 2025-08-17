@@ -33,7 +33,7 @@ const scopeTitleWorst = (s: ScopeKey) =>
   s === 'thisBean' ? '同豆ワースト'
   : s === 'sameRoast' ? '同焙煎度ワースト'
   : '産地×近焙煎度ワースト';
-const [listMode, setListMode] = useState<'top5'|'all'>('top5');
+
 
 // === BEGIN: pattern label helpers ===
 const grind20 = (d:any)=> d?.derive?.grind?.label20 || d?.label20 || '';
@@ -337,27 +337,31 @@ const DripperExplainer: React.FC<{name:string; bean:any}> = ({name, bean})=>{
   })() : (rec.recTime ?? 0)) || '—';
 
   return (
-  <div className="flex flex-wrap gap-1">
-  {k.pros.map((p,i)=>(
-    <span key={'p'+i} className="text-[10px] px-1.5 py-0.5 rounded border bg-slate-100 text-slate-700">
-      強み {p}
-    </span>
-  ))}
-  {k.cons.map((c,i)=>(
-    <span key={'c'+i} className="text-[10px] px-1.5 py-0.5 rounded border bg-amber-50 text-amber-700">
-      注意 {c}
-    </span>
-  ))}
-</div>
-      {/* 最適手法（要点） */}
-      <div className="text-[12px] leading-5 text-gray-800">
-        <div>最適手法：粒度 <b>{k.howto.grindGroup}</b> ／ 目安温度 <b>{Number.isFinite(t)?`${t}℃`:'—'}</b> ／ 目安時間 <b>{s}</b></div>
-        <div className="text-[11px] text-gray-600">
-          {k.howto.pour ? `注湯：${k.howto.pour}` : ''} {k.howto.ratioHint ? `／ レシオ目安：${k.howto.ratioHint}` : ''}
-        </div>
+  <div className="mt-1.5 space-y-1">
+    <div className="flex flex-wrap gap-1">
+      {k.pros.map((p,i)=>(
+        <span key={'p'+i} className="text-[10px] px-1.5 py-0.5 rounded border bg-slate-100 text-slate-700">
+          強み {p}
+        </span>
+      ))}
+      {k.cons.map((c,i)=>(
+        <span key={'c'+i} className="text-[10px] px-1.5 py-0.5 rounded border bg-amber-50 text-amber-700">
+          注意 {c}
+        </span>
+      ))}
+    </div>
+
+    {/* 最適手法（要点） */}
+    <div className="text-[12px] leading-5 text-gray-800">
+      <div>
+        最適手法：粒度 <b>{k.howto.grindGroup}</b> ／ 目安温度 <b>{Number.isFinite(t)?`${t}℃`:'—'}</b> ／ 目安時間 <b>{s}</b>
+      </div>
+      <div className="text-[11px] text-gray-600">
+        {k.howto.pour ? `注湯：${k.howto.pour}` : ''} {k.howto.ratioHint ? `／ レシオ目安：${k.howto.ratioHint}` : ''}
       </div>
     </div>
-  );
+  </div>
+);
 };
 // ドリッパーの物性プロファイル（0..1）
 const DRIPPER_PROFILE: Record<string, {clarity:number; body:number; oil:number; speed:number; immersion:number}> = {
@@ -622,6 +626,7 @@ export function DripForm({API, beans, onSaved}:{API:string; beans:any[]; onSaved
   const [form,setForm] = useState<any>({ ratings:{} })
   const [derive, setDerive] = useState<any>(null)
   const [openAllDrippers, setOpenAllDrippers] = useState(false);
+  const [listMode, setListMode] = useState<'top5'|'all'>('top5');
   const [beanStats, setBeanStats] = useState<any>(null)
   const [dripDate, setDripDate] = useState<string>(
     new Date().toISOString().slice(0, 10)
@@ -983,15 +988,16 @@ const toggleChart = (k: RadarItemKeyExt) => setShowCharts(s => ({ ...s, [k]: !s[
   () => pickRecommendedDrippers({ bean: selBean, beanStats, useEmpiricalRanking }),
   [selBean, beanStats?.by_method, useEmpiricalRanking]
 );
-  // 全ドリッパー（おすすめ順・全件）
+// 全ドリッパー（おすすめ順・全件）
 const allDrippersOrdered = useMemo(
-  // ▼ この直後に追加
-const dripperList = useMemo(
-  () => listMode==='top5' ? recommendedDrippers : allDrippersOrdered,
-  [listMode, recommendedDrippers, allDrippersOrdered]
-);
   () => pickRecommendedDrippers({ bean: selBean, beanStats, useEmpiricalRanking, limit: 'all' }),
   [selBean, beanStats?.by_method, useEmpiricalRanking]
+);
+
+// 表示切替用（TOP5 or 全部）
+const dripperList = useMemo(
+  () => listMode === 'top5' ? recommendedDrippers : allDrippersOrdered,
+  [listMode, recommendedDrippers, allDrippersOrdered]
 );
   // ★ 追加：TOP5を全体から除外
 const allDrippersExceptTop = useMemo(()=>{
@@ -1611,60 +1617,25 @@ const splitForNiceRows = (nodes: React.ReactNode[]) => {
   </div>
 
   {showDripperBlocks && (
-    <>
-      {/* TOP5（rank/score を常時表示。理由は正負で色分け） */}
-      <ul className="mt-2 grid gap-2 [grid-template-columns:repeat(auto-fit,minmax(240px,1fr))]">
-        {recommendedDrippers.map(d=>(
-          <li key={d.name} className="border rounded p-3 bg-white">
-            <div className="flex items-baseline gap-2">
-              <span className="text-[10px] px-1.5 py-0.5 rounded bg-blue-50 border text-blue-700">#{d.rank}</span>
-              <b className="text-[15px]">{d.name}</b>
-              <span className="text-xs text-gray-600">— {d.short}</span>
-              <span className="ml-auto text-[11px] px-1.5 py-0.5 rounded border bg-gray-50">総合 {d.score}</span>
-            </div>
-            <p className="mt-1 text-[12px] leading-5 text-gray-800">{d.desc}</p>
-            <DripperExplainer name={d.name} bean={selBean} />
-            {/* ドリッパー固有の特徴（灰） */}
-            {d.tags?.length>0 && (
-              <div className="mt-1.5 flex flex-wrap gap-1">
-                {d.tags.map((t,i)=>(
-                  <span key={i} className="text-[10px] px-1.5 py-0.5 rounded bg-gray-100 border text-gray-700">{t}</span>
-                ))}
-              </div>
-            )}
-
-            {/* 豆に基づく示唆（複合）＋/− 色分け */}
-            {d.reasons2?.length>0 && (
-              <div className="mt-1.5 flex flex-wrap gap-1">
-                {d.reasons2.map((r,i)=>(
-                  <span
-                    key={i}
-                    className={`text-[10px] px-1.5 py-0.5 rounded border ${
-                      r.sign==='+' ? 'bg-green-50 text-green-700' : 'bg-red-50 text-red-700'
-                    }`}
-                    title={`${r.sign}${r.weight}`}
-                  >
-                    {r.sign==='+'?'＋':'−'} {r.label}
-                  </span>
-                ))}
-              </div>
-            )}
-          </li>
-        ))}
-      </ul>
-
-      {/* 全件（同じrankをそのまま表示。ダブりではなく“統一”） */}
-      {allDrippersOrdered?.length>0 && (
-        <div className="mt-3">
-         <AllDrippersSection
-   bean={selBean}
-    items={allDrippersExceptTop as any}
-  showEmpiricalReasons={showEmpiricalReasons}
-  onPick={(name)=> handle('dripper', name)}
-/>
-        </div>
-      )}
-    </>
+  <>
+  {listMode === 'top5' ? (
+    <ul className="mt-2 grid gap-2 [grid-template-columns:repeat(auto-fit,minmax(240px,1fr))]">
+      {recommendedDrippers.map(d => (/* 既存の <li> ... */))}
+    </ul>
+  ) : (
+    allDrippersOrdered?.length > 0 && (
+      <div className="mt-3">
+        <AllDrippersSection
+          bean={selBean}
+          items={allDrippersOrdered as any}   // ← 全件をそのまま渡す
+          showEmpiricalReasons={showEmpiricalReasons}
+          onPick={(name)=> handle('dripper', name)}
+        />
+      </div>
+    )
+  )}
+</>
+          
   )}
 
   {/* セレクトは常に残す（表示OFFでも選べるように） */}
