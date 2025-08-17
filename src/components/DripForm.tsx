@@ -35,7 +35,33 @@ const scopeTitleWorst = (s: ScopeKey) =>
   : '産地×近焙煎度ワースト';
 
 
-// === BEGIN: pattern label helpers ===
+// === BEGIN: scoring helpers (add) ===
+const clamp = (x:number, lo:number, hi:number)=> Math.max(lo, Math.min(hi, x));
+const round2 = (x:number)=> Math.round(x*100)/100;
+
+/** 0..10の平均点と件数からウィルソン下限(0..1)を返す（母数補正） */
+const wilsonLowerBound = (mean0to10:number, n:number, z=1.96)=>{
+  const p = clamp((mean0to10||0)/10, 0, 1);
+  if (!Number.isFinite(n) || n<=0) return 0;
+  const denom = 1 + (z*z)/n;
+  const centre = p + (z*z)/(2*n);
+  const margin = z*Math.sqrt((p*(p-1)+(z*z)/(4*n))/n); // p*(1-p) と同値
+  return clamp((centre - margin)/denom, 0, 1);
+};
+
+/** [min,max] を [0,1] へ（全要素が同値なら 0） */
+const normalize01 = (val:number, min:number, max:number)=>{
+  if (!Number.isFinite(val) || !Number.isFinite(min) || !Number.isFinite(max) || max<=min) return 0;
+  return clamp((val-min)/(max-min), 0, 1);
+};
+
+/** 加点を減衰合成（同カテゴリ内の“盛りすぎ”抑制）。wは>0のみ想定。 */
+const dampedSum = (weights:number[], wMax=2.0)=>{
+  const ws = weights.filter(w=>w>0).map(w=> Math.min(1, w/wMax));
+  // 1 - ∏(1-w) ：wが増えるほど限界に収束
+  return 1 - ws.reduce((p,w)=> p*(1-w), 1);
+};
+// === END: scoring helpers (add) ===
 const grind20 = (d:any)=> d?.derive?.grind?.label20 || d?.label20 || '';
 const grindGroup6 = (label20?:string|null)=>{
   if(!label20) return '';
@@ -586,9 +612,12 @@ type DripPick = { name: string; short: string; desc: string; tags: string[]; rea
 type Reason = { label: string; sign: '+'|'-'; weight: number };
 
 export function pickRecommendedDrippers(args:{
-  bean?:any; beanStats?:any|null; useEmpiricalRanking?: boolean; limit?: number|'all';
+  bean?:any; beanStats?:any|null; useEmpiricalRanking?: boolean;
+  limit?: number|'all';
+  /** ランキングの目的関数（UIの指標と連動） */
+  objective?: 'overall'|'clean'|'flavor'|'body';
 }): Array<DripPick & { score:number; rank:number; reasons2:Reason[] }> {
-  const { bean, beanStats, useEmpiricalRanking = true } = args || {};
+  const { bean, beanStats, useEmpiricalRanking = true, objective='overall' } = args || {};
   const roast   = String(bean?.roast_level||'');
   const process = (bean?.process||'') + ' ' + (bean?.addl_process||'');
   const origin  = String(bean?.origin||'');
@@ -601,20 +630,21 @@ export function pickRecommendedDrippers(args:{
   const light = /(ライト|シナモン|ミディアム|ハイ)/.test(roast);
   const dark  = /(フルシティ|フレンチ|イタリアン)/.test(roast);
 
+  // 実績（母数補正＋0..1正規化）
   const byMethod = Array.isArray(beanStats?.by_method) ? beanStats!.by_method as Array<{dripper:string; avg_overall:number; count?:number}> : [];
-  const empiricalScore = Object.fromEntries(
-    byMethod.map(x=>{
-      const base = Number(x.avg_overall||0);                    // 0..10
-      const bonus = Math.log10(1 + Number(x.count||0)) * 0.6;   // 実績回数ボーナス
-      return [x.dripper, base + bonus];
-    })
-  );
+  const empRaw: Record<string, number> = {};
+  for (const x of byMethod) {
+    empRaw[x.dripper] = wilsonLowerBound(Number(x.avg_overall||0), Number(x.count||0));
+  }
+  const empVals = Object.values(empRaw);
+  const empMin = empVals.length? Math.min(...empVals) : 0;
+  const empMax = empVals.length? Math.max(...empVals) : 1;
+  const emp01 = (name:string)=> normalize01(empRaw[name] ?? 0, empMin, empMax); // 0..1
 
   const baseList = Object.keys(DRIPPER_DETAILS);
 
-  // ルールベースの“相性”重み（±）
+  // ルール相性理由
   const push = (map:Record<string,Reason[]>, name:string, r:Reason)=>{ (map[name] ||= []).push(r); };
-
   const reasonMap: Record<string, Reason[]> = {};
   const add = (name:string, label:string, w:number)=> push(reasonMap, name, { label, sign: w>=0?'+':'-', weight: Math.abs(w) });
 
@@ -649,118 +679,100 @@ export function pickRecommendedDrippers(args:{
   const aromaOrigin = /(エチオピア|ケニア|ルワンダ|ブルンジ|コロンビア|グアテマラ)/;
   const heavyOrigin = /(インドネシア|スマトラ|マンデリン|ブラジル)/;
   if (aromaOrigin.test(origin)){
-   ['フラワー','ハリオ','カリタウェーブ','クリスタル'].forEach(n=> add(n,'産地: 香り重視の豆は輪郭と香りを出しやすい', +1.0));
- }
+    ['フラワー','ハリオ','カリタウェーブ','クリスタル'].forEach(n=> add(n,'産地: 香り重視の豆は輪郭と香りを出しやすい', +1.0));
+  }
   if (heavyOrigin.test(origin)){
-   ['ネル','フレンチプレス','クレバー','ハリオスイッチ'].forEach(n=> add(n,'産地: コクが出やすく、オイル感が活きる', +1.0));
-   ['クリスタル'].forEach(n=> add(n,'産地: コクの強い産地で超クリアに寄せると薄く感じやすい', -0.8));
- }
-  // --- 追加の相性（明示的な＋/−の根拠） ---
-// 浅め・ウォッシュト・高香りに対する加圧/金属/重厚器具のマイナス
-if (light || isWashed || aromaOrigin.test(origin)) {
-   ['エスプレッソ','モカポット','フィン','フレンチプレス','ネル'].forEach(n =>
-     add(n,'クリア/軽快狙いでは、重厚・オイルが出過ぎやすい', -1.0));
- }
+    ['ネル','フレンチプレス','クレバー','ハリオスイッチ'].forEach(n=> add(n,'産地: コクが出やすく、オイル感が活きる', +1.0));
+    ['クリスタル'].forEach(n=> add(n,'産地: コクの強い産地で超クリアに寄せると薄く感じやすい', -0.8));
+  }
 
+  // --- 追加相性 ---
+  if (light || isWashed || aromaOrigin.test(origin)) {
+    ['エスプレッソ','モカポット','フィン','フレンチプレス','ネル'].forEach(n =>
+      add(n,'クリア/軽快狙いでは、重厚・オイルが出過ぎやすい', -1.0));
+  }
+  if (dark || heavyOrigin.test(origin) || isFerment || isNatural) {
+    ['ハリオ','フラワー','クリスタル','ブルーボトル'].forEach(n =>
+      add(n,'厚みを出したい局面では、クリア特化にすると薄くなりやすい', -0.9));
+  }
+  if (light || isNatural) add('水出し','低温長時間で酸を穏やかにし甘みを前に出せる', +1.0);
+  if (dark || heavyOrigin.test(origin)) add('水出し','ホットの香り立ち重視なら不利', -0.6);
+  if (isWashed || aromaOrigin.test(origin)) add('サイフォン','減圧ろ過で香りと透明感の両立', +0.9);
+  if (isFerment || isNatural) add('エアロプレス','圧力/攪拌/フィルタ選択で味を整えやすい', +0.8);
+  if (dark || heavyOrigin.test(origin) || isFerment) ['エスプレッソ','モカポット'].forEach(n => add(n,'高圧・高濃度で甘苦の厚みを最優先', +1.1));
 
-// 深煎り・重厚・発酵/ナチュラルでの“軽快・超クリア”器具のマイナス強化
-if (dark || heavyOrigin.test(origin) || isFerment || isNatural) {
-   ['ハリオ','フラワー','クリスタル','ブルーボトル'].forEach(n =>
-     add(n,'厚みを出したい局面では、クリア特化にすると薄くなりやすい', -0.9));
- }
+  // 豆から推定する基礎ターゲット
+  const target = { clarity:0.5, body:0.5, oil:0.3, speed:0.5, immersion:0.4 };
+  if (light || isWashed || /(エチオピア|ケニア|ルワンダ|ブルンジ)/.test(origin)) {
+    target.clarity   += 0.25;
+    target.body      -= 0.10;
+    target.oil       -= 0.15;
+    target.speed     += 0.15;
+    target.immersion -= 0.10;
+  }
+  if (dark || /(インドネシア|スマトラ|マンデリン|ブラジル)/.test(origin) || isFerment || isNatural) {
+    target.body      += 0.25;
+    target.oil       += 0.20;
+    target.clarity   -= 0.10;
+    target.speed     -= 0.15;
+    target.immersion += 0.15;
+  }
+  if (isHoney) target.immersion += 0.10;
 
-// 水出し：酸を抑えて丸めたい（浅〜中浅/ナチュラルにプラス）
-if (light || isNatural) {
-  add('水出し','低温長時間で酸を穏やかにし甘みを前に出せる', +1.0);
-}
-// 水出し：重厚/深煎りの“香り立ち”目的ではマイナス
-if (dark || heavyOrigin.test(origin)) {
-  add('水出し','ホットの立体感・香りの立ち上がりを重視するなら不利', -0.6);
-}
-
-// サイフォン：ウォッシュト/高香りでの両立（香り×クリーン）を明示加点
-if (isWashed || aromaOrigin.test(origin)) {
-  add('サイフォン','減圧ろ過で香りと透明感の両立', +0.9);
-}
-
-// エアロプレス：発酵/ナチュラルを“丸める/締める”自由度を加点
-if (isFerment || isNatural) {
-   add('エアロプレス','攪拌・圧力・ペーパー/金属の選択で味を整えやすい', +0.8);
- }
-
-// エスプレッソ/モカポット：深煎り・重厚・発酵で明示加点（凝縮）
-if (dark || heavyOrigin.test(origin) || isFerment) {
-  ['エスプレッソ','モカポット'].forEach(n =>
-    add(n,'高圧・高濃度で甘苦の厚みを最優先できる', +1.1));
-}
-
-// 豆から推定するターゲット（何を伸ばすか）
-const target = { clarity:0.5, body:0.5, oil:0.3, speed:0.5, immersion:0.4 };
-
-// 浅め・高香り or ウォッシュト → clarity寄り & 速め/低浸漬
-if (light || isWashed || /(エチオピア|ケニア|ルワンダ|ブルンジ)/.test(origin)) {
-  target.clarity   += 0.25;
-  target.body      -= 0.10;
-  target.oil       -= 0.15;
-  target.speed     += 0.15; // ← 追加
-  target.immersion -= 0.10; // ← 追加
-}
-
-// 深煎り・重厚産地・発酵/ナチュラル → body/oil寄り & 遅め/高浸漬
-if (dark || /(インドネシア|スマトラ|マンデリン|ブラジル)/.test(origin) || isFerment || isNatural) {
-  target.body      += 0.25;
-  target.oil       += 0.20;
-  target.clarity   -= 0.10;
-  target.speed     -= 0.15; // ← 追加
-  target.immersion += 0.15; // ← 追加
-}
-
-// ハニーはやや浸漬寄りが甘みを乗せやすい
-if (isHoney) target.immersion += 0.10;
+  // 目的関数（UI選択）で微調整
+  if (objective==='clean') { target.clarity += 0.20; target.oil -= 0.10; }
+  else if (objective==='body') { target.body += 0.20; target.oil += 0.10; target.clarity -= 0.10; }
+  else if (objective==='flavor') { target.clarity += 0.10; target.body += 0.05; target.speed += 0.05; }
 
   // スコア集計
   const items = baseList.map(name=>{
     const d = DRIPPER_DETAILS[name] || { short:'', desc:'', tags:[] };
     const reasons = reasonMap[name] || [];
-const ruleScore = reasons.reduce((s,r)=> s + (r.sign==='+'? r.weight : -r.weight), 0);
 
-// プロファイル適合度（余弦類似っぽい簡易スコア）
-const prof = DRIPPER_PROFILE[name] || {clarity:.5,body:.5,oil:.3,speed:.5,immersion:.5};
-const dot = (
-  prof.clarity*target.clarity + prof.body*target.body + prof.oil*target.oil +
-  prof.speed*target.speed + prof.immersion*target.immersion
-);
-const normA = Math.sqrt(prof.clarity**2+prof.body**2+prof.oil**2+prof.speed**2+prof.immersion**2);
-const normB = Math.sqrt(target.clarity**2+target.body**2+target.oil**2+target.speed**2+target.immersion**2);
-const profCos = (normA && normB) ? (dot/(normA*normB)) : 0.5;       // だいたい 0..1
-const profScore = (profCos - 0.5) * 2.0;                            // -1..+1 に正規化
+    // ルール：カテゴリ別減衰合成（“焙煎/精製/産地/その他”で括る）
+    const posByCat: Record<string, number[]> = {};
+    const negByCat: Record<string, number[]> = {};
+    for (const r of reasons) {
+      const cat = String(r.label||'').split(':')[0] || 'その他';
+      if (r.sign==='+') (posByCat[cat] ||= []).push(r.weight);
+      else (negByCat[cat] ||= []).push(r.weight);
+    }
+    const posSum = Object.values(posByCat).reduce((s,arr)=> s + dampedSum(arr, 2.0), 0);
+    const negSum = Object.values(negByCat).reduce((s,arr)=> s + dampedSum(arr, 2.0), 0);
+    const ruleScoreRaw = posSum - negSum;             // 理論上 -∞..+∞ だが実際は±数点に収まる
+    const ruleN = clamp(ruleScoreRaw/3.0, -1, 1);     // -1..+1 に圧縮
 
-// 実績寄与（最大 +1.8）
-const emp = useEmpiricalRanking ? (empiricalScore[name]||0) : 0;
-const empNorm = emp>0 ? (emp/10)*1.8 : 0;
+    // プロファイル適合度（-1..+1）
+    const prof = DRIPPER_PROFILE[name] || {clarity:.5,body:.5,oil:.3,speed:.5,immersion:.5};
+    const dot = (prof.clarity*target.clarity + prof.body*target.body + prof.oil*target.oil + prof.speed*target.speed + prof.immersion*target.immersion);
+    const normA = Math.sqrt(prof.clarity**2+prof.body**2+prof.oil**2+prof.speed**2+prof.immersion**2);
+    const normB = Math.sqrt(target.clarity**2+target.body**2+target.oil**2+target.speed**2+target.immersion**2);
+    const profCos = (normA && normB) ? (dot/(normA*normB)) : 0.5;
+    const profN = clamp((profCos - 0.5) * 2.0, -1, 1); // -1..+1
 
-// 合成：ルール ± ＋ プロファイル(±1.2) ＋ 実績
-const score = Math.round((ruleScore + profScore*1.2 + empNorm) * 100)/100;
+    // 実績（0..1→-1..+1）
+    const empN = useEmpiricalRanking ? (emp01(name)*2 - 1) : 0;
 
-    // 旧 reasons も残す（下位互換）
-   const legacyReasons = (
+    // 合成（重みは保守的に：ルール0.5 / プロファイル0.3 / 実績0.2）
+    const w_rule = 0.5, w_prof = 0.3, w_emp = 0.2;
+    const score = round2(w_rule*ruleN + w_prof*profN + w_emp*empN);
+
+    const legacyReasons = (
       byMethod.find(x=>x.dripper===name)
         ? [`実績: 平均${(byMethod.find(x=>x.dripper===name)!.avg_overall).toFixed(1)}（n=${byMethod.find(x=>x.dripper===name)!.count||0}）`]
         : []
     );
-
-    const pick: DripPick & {score:number; rank:number; reasons2:Reason[]} = {
-      name, short:d.short, desc:d.desc, tags:d.tags, reasons: legacyReasons, reasons2: reasons, score, rank: 0
-    };
-    return pick;
+    return {
+      name, short:d.short, desc:d.desc, tags:d.tags,
+      reasons: legacyReasons, reasons2: reasons, score, rank: 0
+    } as DripPick & {score:number; rank:number; reasons2:Reason[]};
   })
   .sort((a,b)=> b.score - a.score);
 
   items.forEach((x,i)=> x.rank = i+1);
 
   const limit = (args?.limit ?? 5);
-  const picked = (limit==='all') ? items : items.slice(0, Math.max(0, Number(limit)||0));
-  return picked;
+  return (limit==='all') ? items : items.slice(0, Math.max(0, Number(limit)||0));
 }
 
 /** 焙煎度→推奨湯温（℃） */
@@ -1182,15 +1194,22 @@ const toggleChart = (k: RadarItemKeyExt) => setShowCharts(s => ({ ...s, [k]: !s[
   // 表示ヘルパ
   const selBean = beans.find(b=> String(b.id)===String(form.bean_id))
 
-  // 推奨ドリッパーTOP5（実績→ルール）
-  const recommendedDrippers = useMemo(
-  () => pickRecommendedDrippers({ bean: selBean, beanStats, useEmpiricalRanking }),
-  [selBean, beanStats?.by_method, useEmpiricalRanking]
+// 推奨ドリッパーTOP5（実績→ルール）
+const recommendedDrippers = useMemo(
+  () => pickRecommendedDrippers({
+    bean: selBean, beanStats, useEmpiricalRanking,
+    objective: yMetric as 'overall'|'clean'|'flavor'|'body'
+  }),
+  [selBean, beanStats?.by_method, useEmpiricalRanking, yMetric]
 );
+
 // 全ドリッパー（おすすめ順・全件）
 const allDrippersOrdered = useMemo(
-  () => pickRecommendedDrippers({ bean: selBean, beanStats, useEmpiricalRanking, limit: 'all' }),
-  [selBean, beanStats?.by_method, useEmpiricalRanking]
+  () => pickRecommendedDrippers({
+    bean: selBean, beanStats, useEmpiricalRanking, limit: 'all',
+    objective: yMetric as 'overall'|'clean'|'flavor'|'body'
+  }),
+  [selBean, beanStats?.by_method, useEmpiricalRanking, yMetric]
 );
 
 // 表示切替用（TOP5 or 全部）
