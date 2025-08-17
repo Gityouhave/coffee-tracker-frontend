@@ -1646,7 +1646,6 @@ const splitForNiceRows = (nodes: React.ReactNode[]) => {
   <div className="text-xs text-gray-600 mt-1">
     ドリッパー理論：{form.dripper ? (derive?.theory?.dripper ?? '—') : '--'}
   </div>
-</div>
 
       
 
