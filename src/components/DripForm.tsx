@@ -1644,95 +1644,102 @@ const splitForNiceRows = (nodes: React.ReactNode[]) => {
     </form>
   )
 }
-// コンパクトな“角カード”で全件を表示する折りたたみセクション
+
+// コンパクト/開閉ボタンを廃止し、ランキング表示トグルを追加。
+// また、タグを「ドリッパー特性」と「豆に基づく示唆」に分離。
 const AllDrippersSection: React.FC<{
   items: { name:string; short:string; desc:string; tags:string[]; reasons:string[] }[];
   showEmpiricalReasons: boolean;
   onPick: (name:string)=>void;
-  open: boolean;
-  onOpenChange: (next:boolean)=>void;
-}> = ({ items, showEmpiricalReasons, onPick, open, onOpenChange }) => {
-  const [compact, setCompact] = React.useState(true);     // 省スペース表示
-  const [showDesc, setShowDesc] = React.useState(true);   // 説明テキスト表示
+  // 親の既存呼び出しを壊さないために残す（内部では未使用）
+  open?: boolean;
+  onOpenChange?: (next:boolean)=>void;
+}> = ({ items, showEmpiricalReasons, onPick }) => {
+  const [showDesc, setShowDesc] = React.useState(true);       // 説明テキスト表示
+  const [showRanking, setShowRanking] = React.useState(true);  // #順位の表示
+
   return (
     <div className="border rounded">
       <div className="flex items-center justify-between px-2 py-1 bg-gray-50">
         <div className="text-xs font-semibold">全ドリッパー（おすすめ順）</div>
         <div className="flex items-center gap-3 text-[11px]">
           <label className="inline-flex items-center gap-1">
-            <input type="checkbox" checked={compact} onChange={()=>setCompact(v=>!v)} />
-            コンパクト
-          </label>
-          <label className="inline-flex items-center gap-1">
             <input type="checkbox" checked={showDesc} onChange={()=>setShowDesc(v=>!v)} />
             説明
           </label>
-          <button
-            type="button"
-            onClick={()=>onOpenChange(!open)}
-            className="px-2 py-0.5 rounded border bg-white hover:bg-gray-50"
-          >
-            {open ? '閉じる' : '表示'}
-          </button>
+          <label className="inline-flex items-center gap-1">
+            <input type="checkbox" checked={showRanking} onChange={()=>setShowRanking(v=>!v)} />
+            ランキング表示
+          </label>
         </div>
       </div>
 
-      {open && (
-        <ul className="p-2 grid gap-2
-                       [grid-template-columns:repeat(auto-fit,minmax(220px,1fr))]">
-          {items.map((d)=> {
-            const reasons = (d.reasons||[]).filter(r => showEmpiricalReasons ? true : !r.startsWith('実績:'));
-            return (
-              <li key={d.name} className={`border rounded bg-white ${compact?'p-2':'p-3'}`}>
-                <div className="flex items-baseline justify-between gap-2">
-                  <div className="flex-1 min-w-0">
-                    <div className="flex flex-wrap items-baseline gap-2">
-                      <b className={`${compact?'text-sm':'text-[15px]'}`}>{d.name}</b>
-                      <span className="text-xs text-gray-600">— {d.short}</span>
-                    </div>
-                    {showDesc && (
-                      <p
-                        className="mt-1 text-[12px] leading-5 text-gray-800"
-                        style={{ display: '-webkit-box', WebkitLineClamp: compact?2:3, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}
-                      >
-                        {d.desc}
-                      </p>
+      {/* 常に展開表示（開閉ボタンは廃止） */}
+      <ul className="p-2 grid gap-2 [grid-template-columns:repeat(auto-fit,minmax(220px,1fr))]">
+        {items.map((d, idx)=> {
+          const reasons = (d.reasons||[]).filter(r => showEmpiricalReasons ? true : !r.startsWith('実績:'));
+          return (
+            <li key={d.name} className="border rounded bg-white p-3">
+              <div className="flex items-baseline justify-between gap-2">
+                <div className="flex-1 min-w-0">
+                  <div className="flex flex-wrap items-baseline gap-2">
+                    {showRanking && (
+                      <span className="text-[10px] px-1.5 py-0.5 rounded bg-blue-50 border text-blue-700">#{idx+1}</span>
                     )}
+                    <b className="text-[15px]">{d.name}</b>
+                    <span className="text-xs text-gray-600">— {d.short}</span>
                   </div>
-                  <button
-                    type="button"
-                    onClick={()=> onPick(d.name)}
-                    className="shrink-0 self-start px-2 py-1 rounded border text-[11px] bg-white hover:bg-gray-50"
-                    aria-label={`${d.name} を選択`}
-                    title={`${d.name} を選択`}
-                  >
-                    選ぶ
-                  </button>
+                  {showDesc && (
+                    <p
+                      className="mt-1 text-[12px] leading-5 text-gray-800"
+                      style={{ display: '-webkit-box', WebkitLineClamp: 3, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}
+                    >
+                      {d.desc}
+                    </p>
+                  )}
                 </div>
+                <button
+                  type="button"
+                  onClick={()=> onPick(d.name)}
+                  className="shrink-0 self-start px-2 py-1 rounded border text-[11px] bg-white hover:bg-gray-50"
+                  aria-label={`${d.name} を選択`}
+                  title={`${d.name} を選択`}
+                >
+                  選ぶ
+                </button>
+              </div>
 
-                {d.tags?.length > 0 && (
-                  <div className="mt-1.5 flex flex-wrap gap-1">
+              {/* ① ドリッパー固有の特徴（灰） */}
+              {d.tags?.length > 0 && (
+                <div className="mt-1.5">
+                  <span className="text-[10px] mr-1 text-gray-500">ドリッパー特性：</span>
+                  <div className="mt-1 flex flex-wrap gap-1">
                     {d.tags.map((t, i) => (
                       <span key={`tag-${d.name}-${i}`} className="text-[10px] px-1.5 py-0.5 rounded bg-gray-100 border text-gray-700">
                         {t}
                       </span>
                     ))}
                   </div>
-                )}
-                {reasons.length > 0 && (
+                </div>
+              )}
+
+              {/* ② 豆に基づく示唆（青）— 産地/焙煎/精製/実績など */}
+              {reasons.length > 0 && (
+                <div className="mt-1.5">
+                  <span className="text-[10px] mr-1 text-gray-500">豆に基づく示唆：</span>
                   <div className="mt-1 flex flex-wrap gap-1">
                     {reasons.map((r, i) => (
-                      <span key={`rs-${d.name}-${i}`} className="text-[10px] px-1 py-0.5 rounded bg-gray-50 border text-gray-600">
+                      <span key={`rs-${d.name}-${i}`} className="text-[10px] px-1 py-0.5 rounded bg-blue-50 border text-blue-700">
                         {r}
                       </span>
                     ))}
                   </div>
-                )}
-              </li>
-            );
-          })}
-        </ul>
-      )}
+                </div>
+              )}
+            </li>
+          );
+        })}
+      </ul>
     </div>
   );
 };
