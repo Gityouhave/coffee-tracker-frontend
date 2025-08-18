@@ -1803,22 +1803,31 @@ export function pickRecommendedDrippers(args: {
 const n = Number(bmEntry?.count || 0);
 const avg_overall = Number(bmEntry?.avg_overall);
 
+// 実績（n, 平均）を一度だけ取得してから安全にフォーマット
+const bmEntry = byMethod.find(x => x.dripper === name);
+const n = Number(bmEntry?.count || 0);
+const avg_overall = Number(bmEntry?.avg_overall);
+
 const legacyReasons =
   bmEntry && Number.isFinite(avg_overall)
     ? [`実績: 平均${avg_overall.toFixed(1)}（n=${n}）`]
     : [];
-      const bmEntry = byMethod.find((x) => x.dripper === name);
-      const n = Number(bmEntry?.count || 0);
-      const avg_overall = Number(bmEntry?.avg_overall ?? NaN);
 
-      return {
-  name, short:d.short, desc:d.desc, tags:d.tags,
-  reasons: legacyReasons, reasons2: reasons, score, rank: 0,
-  n, avg_overall
-}; as (DripPick & { score: number; rank: number; reasons2: Reason[] }) & {
-        n: number;
-        avg_overall: number;
-      };
+    return ({
+  name,
+  short: d.short,
+  desc: d.desc,
+  tags: d.tags,
+  reasons: legacyReasons,
+  reasons2: reasons,
+  score,
+  rank: 0,
+  n,
+  avg_overall
+}) as (DripPick & { score: number; rank: number; reasons2: Reason[] }) & {
+  n: number;
+  avg_overall: number;
+};
     })
     .sort((a, b) => b.score - a.score);
 
