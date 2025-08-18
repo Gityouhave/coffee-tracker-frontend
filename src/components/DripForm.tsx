@@ -1798,11 +1798,6 @@ export function pickRecommendedDrippers(args: {
       // 合成（重みは保守的に：ルール0.5 / プロファイル0.3 / 実績0.2）
       const { rule: w_rule, profile: w_prof, empirical: w_emp } = SCORE_WEIGHTS;
       const score = round2(w_rule * ruleN + w_prof * profN + w_emp * empN);
-
-// 実績（n, 平均）を一度だけ取得してから安全にフォーマット
-const bmEntry = byMethod.find(x => x.dripper === name);
-const n = Number(bmEntry?.count || 0);
-
 // （ここは return オブジェクトを作る直前の位置に置く）
 // 実績（n, 平均）を一度だけ取得し、数値チェックしてから表示テキストを作る
 const bm = byMethod.find((x) => x.dripper === name);
