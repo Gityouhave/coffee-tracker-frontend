@@ -612,6 +612,19 @@ const s = Number.isFinite(baseSec) && baseSec>0 ? secToHMMSS(baseSec) : '—';
         {k.howto.pour ? `注湯：${k.howto.pour}` : ''} {k.howto.ratioHint ? `／ レシオ目安：${k.howto.ratioHint}` : ''}
       </div>
     </div>
+    // DripperExplainer 内、return の末尾あたりに追加
+{k.examples?.length > 0 && (
+  <div className="mt-1.5">
+    <div className="text-[12px] font-medium text-gray-700">相性の例</div>
+    <div className="mt-1 flex flex-wrap gap-1.5">
+      {k.examples.map((ex, i)=>(
+        <span key={i} className="text-[10px] px-1.5 py-0.5 rounded border bg-white text-gray-700">
+          {ex.origin}・{ex.process}／{ex.roast} — {ex.flavor}
+        </span>
+      ))}
+    </div>
+  </div>
+)}
   </div>
 );
 };
@@ -1648,12 +1661,12 @@ const splitForNiceRows = (nodes: React.ReactNode[]) => {
         <div className="font-semibold">選択豆：{selBean?.name ?? '--'}</div>
 
         <TheoryRow label="産地セオリー" theory={originTheoryText()} value={''} show={!!form.bean_id}/>
-        <TheoryRow
-          label="精製セオリー"
-          theory={derive?.theory?.process}
-          value={selBean?.process}
-          show={!!form.bean_id && !!derive?.theory?.process && !isUnknown(derive?.theory?.process)}
-        />
+       <TheoryRow
+  label="精製セオリー"
+  theory={derive?.theory?.process}
+  value={selBean?.process}
+  show={!!form.bean_id}
+/>
         <TheoryRow label="追加処理セオリー" theory={derive?.theory?.addl_process} value={selBean?.addl_process} show={!!form.bean_id}/>
 
         {!isUnknown(selBean?.taste_memo) && (<div>テイストメモ：{selBean?.taste_memo}</div>)}
@@ -2385,6 +2398,26 @@ const DripperList: React.FC<{
       <span key={i} className="text-[10px] px-1.5 py-0.5 rounded border bg-white text-gray-700">
         根拠: {q}
       </span>
+    ))}
+  </div>
+)}
+              // DripperList の各 li 内、qualitative タグのあとに追加
+{DRIPPER_EVIDENCE[d.name]?.features?.length > 0 && (
+  <div className="mt-1.5 flex flex-wrap gap-1">
+    {DRIPPER_EVIDENCE[d.name].features.map((f,i)=>(
+      <span key={i} className="text-[10px] px-1.5 py-0.5 rounded border bg-gray-50 text-gray-700">
+        仕様: {f}
+      </span>
+    ))}
+  </div>
+)}
+
+{DRIPPER_EVIDENCE[d.name]?.sources?.length > 0 && (
+  <div className="mt-1.5 text-[10px] text-gray-500 space-y-0.5">
+    {DRIPPER_EVIDENCE[d.name].sources.map((s,i)=>(
+      <div key={i} className="truncate">
+        出典: <a className="underline" href={s.url} target="_blank" rel="noreferrer">{s.title}</a>
+      </div>
     ))}
   </div>
 )}
