@@ -4318,7 +4318,7 @@ const DripperList: React.FC<{
                   推奨レシピ・相性の例
                 </summary>
                 <div className="pt-1.5">
-// （中略）DripperList の各カード内
+
 <DripperExplainer name={d.name} bean={bean} brewDate={(document.querySelector('input[type="date"]') as HTMLInputElement)?.value || undefined} />                </div>
               </details>
             </li>
