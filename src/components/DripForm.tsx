@@ -1799,21 +1799,24 @@ export function pickRecommendedDrippers(args: {
       const { rule: w_rule, profile: w_prof, empirical: w_emp } = SCORE_WEIGHTS;
       const score = round2(w_rule * ruleN + w_prof * profN + w_emp * empN);
 
-      const bmEntry = byMethod.find(x => x.dripper === name);
-const n = Number(bmEntry?.count || 0);
-const avg_overall = Number(bmEntry?.avg_overall);
-
 // 実績（n, 平均）を一度だけ取得してから安全にフォーマット
 const bmEntry = byMethod.find(x => x.dripper === name);
 const n = Number(bmEntry?.count || 0);
-const avg_overall = Number(bmEntry?.avg_overall);
 
+// （ここは return オブジェクトを作る直前の位置に置く）
+// 実績（n, 平均）を一度だけ取得し、数値チェックしてから表示テキストを作る
+const bm = byMethod.find((x) => x.dripper === name);
+const sampleN = Number(bm?.count ?? 0);
+const avgOverall = Number(bm?.avg_overall);
+
+// 平均が有限値のときだけ toFixed を使う
 const legacyReasons =
-  bmEntry && Number.isFinite(avg_overall)
-    ? [`実績: 平均${avg_overall.toFixed(1)}（n=${n}）`]
+  Number.isFinite(avgOverall)
+    ? [`実績: 平均${avgOverall.toFixed(1)}（n=${sampleN}）`]
     : [];
 
-    return ({
+// 返り値
+return {
   name,
   short: d.short,
   desc: d.desc,
@@ -1822,9 +1825,9 @@ const legacyReasons =
   reasons2: reasons,
   score,
   rank: 0,
-  n,
-  avg_overall
-}) as (DripPick & { score: number; rank: number; reasons2: Reason[] }) & {
+  n: sampleN,
+  avg_overall: Number.isFinite(avgOverall) ? avgOverall : NaN,
+} as (DripPick & { score: number; rank: number; reasons2: Reason[] }) & {
   n: number;
   avg_overall: number;
 };
