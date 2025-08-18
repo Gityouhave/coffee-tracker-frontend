@@ -50,6 +50,8 @@ const ORIGIN_GROUPS = {
 };
 const aromaOrigin = new RegExp(ORIGIN_GROUPS.aroma.join("|"));
 const heavyOrigin = new RegExp(ORIGIN_GROUPS.heavy.join("|"));
+const safeFixed = (v: any, d = 1) =>
+  Number.isFinite(Number(v)) ? Number(v).toFixed(d) : "—";
 // ファイル先頭付近（importの下あたり）に追加
 const ChartFrame: React.FC<
   React.PropsWithChildren<{ aspect?: number; className?: string }>
@@ -1226,7 +1228,7 @@ const DripperExplainer: React.FC<{ name: string; bean: any }> = ({
           <b>
             {mm}:{ss}
           </b>{" "}
-          ／ 比率 <b>1:{opt.ratio.toFixed(1)}</b>
+          ／ 比率 <b>1:{safeFixed(opt.ratio, 1)}</b>
         </div>
         <div className="text-[11px] text-gray-600">
           抽出：{opt.pour.style}／メモ：
