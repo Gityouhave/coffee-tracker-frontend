@@ -17,7 +17,7 @@ import {
   Scatter,
 } from "recharts";
 import { flagify, flagifyOriginList, splitOrigins } from "../utils/flags";
-
+import { getOptimizedRecipe } from '../logic/recipeEngine'
 import { filterSortBeans, beanOptionLabel, ROASTS } from "../utils/beanFilters";
 import { ORIGINS } from "../constants/origins";
 import { ORIGIN_THEORIES } from "../constants/originTheories";
@@ -1148,158 +1148,80 @@ const normalizeRecipe = (
 
   return { ratio, tempC, timeSec, grindGroup, pour: poured };
 };
-const DripperExplainer: React.FC<{ name: string; bean: any }> = ({
-  name,
-  bean,
-}) => {
+const DripperExplainer: React.FC<{name:string; bean:any; brewDate?:string}> = ({name, bean, brewDate})=>{
   const k = DRIPPER_KNOWHOW[name];
-  if (!k) return null;
+  if(!k) return null;
 
-  // 既存の recommendForDrip で焙煎に基づく温度/時間のベースを作る
-  const rec = recommendForDrip({
-    roast_level: bean?.roast_level,
-    derive: null,
-    label20: null,
-  });
-
-  // ベースレシピ（器具howto優先、無ければrec）
-  const baseTimeSec = (() => {
-    const txt = k.howto.time;
-    if (!txt) return rec.recTime ?? 150;
-    const ps = txt.split(":").map(Number);
-    if (ps.length === 3)
-      return (ps[0] || 0) * 3600 + (ps[1] || 0) * 60 + (ps[2] || 0);
-    if (ps.length === 2) return (ps[0] || 0) * 60 + (ps[1] || 0);
-    const n = Number(txt);
-    return Number.isFinite(n) ? n : rec.recTime ?? 150;
-  })();
-
-  const ratioFromHint = Number(
-    (k.howto.ratioHint || "").match(/1:(\d+(\.\d+)?)/)?.[1] ?? 15
+  // ここで最適化
+  const rec = getOptimizedRecipe(
+    {
+      origin: bean?.origin,
+      roast_level: bean?.roast_level,
+      process: bean?.process,
+      addl_process: bean?.addl_process,
+      roast_date: bean?.roast_date || bean?.roasted_on || bean?.purchase_date || bean?.purchased_on || null,
+      name: bean?.name
+    },
+    name,
+    { brewDate }
   );
 
-  const base = {
-    grindGroup: k.howto.grindGroup,
-    tempC: Number.isFinite(k.howto.tempC) ? k.howto.tempC! : rec.recTemp ?? 82,
-    timeSec: baseTimeSec,
-    ratio: ratioFromHint,
-    pour: { style: "pulse" as const, notes: [] },
-  };
-
-  // エイジング日数（焙煎日が無ければ null）
-  const agingDays = (() => {
-    const roastDate =
-      bean?.roast_date ||
-      bean?.roasted_on ||
-      bean?.purchase_date ||
-      bean?.purchased_on;
-    if (!roastDate) return null;
-    const today = new Date().toISOString().slice(0, 10);
-    return Math.floor(
-      (new Date(today).getTime() - new Date(String(roastDate)).getTime()) /
-        (1000 * 60 * 60 * 24)
-    );
+  const t = rec.tempC;
+  const s = (()=>{
+    const sec = rec.timeSec;
+    if (!Number.isFinite(sec as number)) return '—';
+    const m = Math.floor((sec as number)/60), ss = Number(sec)%60;
+    return `${m}:${String(ss).padStart(2,'0')}`;
   })();
-
-  // 文脈
-  const ctx = {
-    dripper: name,
-    roast: String(bean?.roast_level || ""),
-    process: [bean?.process, bean?.addl_process].filter(Boolean).join(" "),
-    origin: String(bean?.origin || ""),
-    agingDays,
-    base,
-  };
-
-// ← ここで最適化！（安全マージ）
-type OptimalRecipe = {
-  grindGroup: string;
-  tempC: number;
-  timeSec: number;
-  ratio: number;
-  pour: { style: string; notes?: string[] };
-};
-const safeNum = (v: any, def: number) =>
-  Number.isFinite(Number(v)) ? Number(v) : def;
-const safeStr = (v: any, def: string) =>
-  typeof v === "string" && v.trim() ? v : def;
-
-const optRaw = (typeof deriveOptimalRecipe === "function"
-  ? deriveOptimalRecipe(ctx)
-  : null) as Partial<OptimalRecipe> | null;
-
-const opt: OptimalRecipe = {
-  grindGroup: optRaw?.grindGroup ?? base.grindGroup,
-  tempC: safeNum(optRaw?.tempC, base.tempC),
-  timeSec: safeNum(optRaw?.timeSec, base.timeSec),
-  ratio: safeNum(optRaw?.ratio, base.ratio),
-  pour: {
-    style: safeStr(optRaw?.pour?.style, base.pour?.style ?? "pulse"),
-    notes: Array.isArray(optRaw?.pour?.notes) ? optRaw!.pour!.notes! : [],
-  },
-};
-
-// 表示用（NaN防止）
-const mm = Math.floor(opt.timeSec / 60);
-const ss = String(Math.max(0, Math.round(opt.timeSec) % 60)).padStart(2, "0");
-const ratioText = Number.isFinite(opt.ratio)
-  ? (opt.ratio as number).toFixed(1)
-  : String(base.ratio);
 
   return (
     <div className="mt-1.5 space-y-1">
-      {/* 強み/注意：既存のまま */}
+      {/* 強み/注意（そのまま） */}
       <div className="flex flex-wrap gap-1">
-        {k.pros.map((p, i) => (
-          <span
-            key={"p" + i}
-            className="text-[10px] px-1.5 py-0.5 rounded border bg-slate-100 text-slate-700"
-          >
+        {k.pros.map((p,i)=>(
+          <span key={'p'+i} className="text-[10px] px-1.5 py-0.5 rounded border bg-slate-100 text-slate-700">
             強み {p}
           </span>
         ))}
-        {k.cons.map((c, i) => (
-          <span
-            key={"c" + i}
-            className="text-[10px] px-1.5 py-0.5 rounded border bg-amber-50 text-amber-700"
-          >
+        {k.cons.map((c,i)=>(
+          <span key={'c'+i} className="text-[10px] px-1.5 py-0.5 rounded border bg-amber-50 text-amber-700">
             注意 {c}
           </span>
         ))}
       </div>
 
-      {/* 最適化後レシピの表出 */}
+      {/* 最適手法（豆条件で最適化済み値を表出） */}
       <div className="text-[12px] leading-5 text-gray-800">
         <div>
-          最適手法：粒度 <b>{opt.grindGroup || "—"}</b> ／ 目安温度{" "}
-<b>{Number.isFinite(opt.tempC) ? Math.round(opt.tempC) + "℃" : "—"}</b> ／ 目安時間{" "}
-<b>
-  {Number.isFinite(opt.timeSec) ? `${mm}:${ss}` : "—"}
-</b>{" "}
-／ 比率 <b>1:{Number.isFinite(opt.ratio) ? opt.ratio.toFixed(1) : "—"}</b>   
+          最適手法：粒度 <b>{rec.grindGroup}</b> ／ 目安温度 <b>{Number.isFinite(t!)?`${t}℃`:'—'}</b> ／ 目安時間 <b>{s}</b>
         </div>
         <div className="text-[11px] text-gray-600">
-  抽出：{opt.pour?.style || "—"}／メモ：
-  {(opt.pour?.notes?.length ? opt.pour.notes.join("・") : "—")}
-  {k.howto.pour ? ` ／ 器具ヒント：${k.howto.pour}` : ""}
-</div>
+          {rec.pour ? `注湯：${rec.pour}` : ''} {rec.ratioHint ? `／ レシオ目安：${rec.ratioHint}` : ''}
+        </div>
       </div>
 
-      {/* 相性の例（元のまま） */}
-      {k.examples?.length > 0 && (
-        <div className="mt-1.5">
-          <div className="text-[12px] font-medium text-gray-700">相性の例</div>
+      {/* 相性の例は折りたたみ表示（要望対応） */}
+      {!!k.examples?.length && (
+        <details className="mt-1.5">
+          <summary className="text-[12px] font-medium text-gray-700 cursor-pointer select-none">相性の例</summary>
           <div className="mt-1 flex flex-wrap gap-1.5">
-            {k.examples.map((ex, i) => (
-              <span
-                key={i}
-                className="text-[10px] px-1.5 py-0.5 rounded border bg-white text-gray-700"
-              >
+            {k.examples.map((ex, i)=>(
+              <span key={i} className="text-[10px] px-1.5 py-0.5 rounded border bg-white text-gray-700">
                 {ex.origin}・{ex.process}／{ex.roast} — {ex.flavor}
               </span>
             ))}
           </div>
-        </div>
+        </details>
+      )}
+
+      {/* 根拠（導出理由） */}
+      {!!rec.trace?.length && (
+        <details className="mt-1.5">
+          <summary className="text-[12px] text-gray-700 cursor-pointer select-none">根拠（自動導出）</summary>
+          <ul className="mt-1 list-disc pl-5 text-[11px] text-gray-700 space-y-0.5">
+            {rec.trace.map((t,i)=><li key={i}>{t}</li>)}
+          </ul>
+        </details>
       )}
     </div>
   );
@@ -2141,30 +2063,41 @@ export function DripForm({
     }));
   };
   // ドリッパーの推奨レシピを適用（器具Knowhowと豆側推奨のマージ）
-  const applySuggested = (name: string) => {
-    const k = (DRIPPER_KNOWHOW as any)[name] || {};
-    const rec = recommendForDrip({
+  // 既存を差し替え
+const applySuggested = (name: string) => {
+  const rec = getOptimizedRecipe(
+    {
+      origin: selBean?.origin,
       roast_level: selBean?.roast_level,
-      derive: null,
-      label20: null,
-    });
-    setForm((s: any) => ({
-      ...s,
-      dripper: name,
-      // howto 優先、なければ rec
-      water_temp_c: Number.isFinite(k?.howto?.tempC)
-        ? k.howto.tempC
-        : rec?.recTemp ?? s.water_temp_c,
-      time:
-        (k?.howto?.time
-          ? k.howto.time.includes(":")
-            ? k.howto.time
-            : secToMMSS(Number(k.howto.time))
-          : Number.isFinite(rec?.recTime)
-          ? secToMMSS(rec.recTime)
-          : s.time) || s.time,
-    }));
+      process: selBean?.process,
+      addl_process: selBean?.addl_process,
+      roast_date: selBean?.roast_date || selBean?.roasted_on || selBean?.purchase_date || selBean?.purchased_on || null,
+      name: selBean?.name
+    },
+    name,
+    { brewDate: form.brew_date || dripDate }
+  );
+
+  const toMMSS = (sec?:number)=> {
+    if(!Number.isFinite(sec as number)) return '';
+    const m = Math.floor((sec as number)/60), s = (sec as number)%60;
+    return `${m}:${String(s).padStart(2,'0')}`;
   };
+
+  setForm((s:any)=>({
+    ...s,
+    dripper: name,
+    // 挽き“グループ”は表示/参考寄り。数値ダイヤルには触れず、必要なら derive 側で追従する。
+    water_temp_c: Number.isFinite(rec.tempC!) ? rec.tempC : s.water_temp_c,
+    time: toMMSS(rec.timeSec) || s.time,
+    // メモ欄に根拠を自動追記（重複簡易抑止）
+    method_memo: (() => {
+      const prefix = `[推奨レシピ(${name})] 粒度:${rec.grindGroup} 温度:${rec.tempC??'—'}℃ 時間:${toMMSS(rec.timeSec)??'—'} 比:${rec.ratioHint??'—'}\n- 根拠:\n  - ${rec.trace.join('\n  - ')}`;
+      const cur = String(s.method_memo||'');
+      return cur.includes('[推奨レシピ(') ? cur : (prefix + (cur ? `\n${cur}` : ''));
+    })()
+  }));
+};
 
   const handle = (k: string, v: any) => setForm((s: any) => ({ ...s, [k]: v }));
   const handleRating = (k: string, v: any) =>
@@ -2570,6 +2503,11 @@ export function DripForm({
     () => (listMode === "top5" ? recommendedDrippers : allDrippersOrdered),
     [listMode, recommendedDrippers, allDrippersOrdered]
   );
+  // DripperList 冒頭：state追加
+const [expandReasons, setExpandReasons] = React.useState<Record<string, boolean>>({});
+const [expandTags, setExpandTags] = React.useState<Record<string, boolean>>({});
+const toggleReasons = (name:string)=> setExpandReasons(s=>({ ...s, [name]: !s[name] }));
+const toggleTags = (name:string)=> setExpandTags(s=>({ ...s, [name]: !s[name] }));
   // ★ 追加：TOP5を全体から除外
   const allDrippersExceptTop = useMemo(() => {
     const topNames = new Set(
@@ -4364,8 +4302,8 @@ const DripperList: React.FC<{
                   推奨レシピ・相性の例
                 </summary>
                 <div className="pt-1.5">
-                  <DripperExplainer name={d.name} bean={bean} />
-                </div>
+// （中略）DripperList の各カード内
+<DripperExplainer name={d.name} bean={bean} brewDate={(document.querySelector('input[type="date"]') as HTMLInputElement)?.value || undefined} />                </div>
               </details>
             </li>
           );
