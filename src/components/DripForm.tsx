@@ -1191,12 +1191,26 @@ const DripperExplainer: React.FC<{ name: string; bean: any }> = ({
     base,
   };
 
-  // ← ここで最適化！
-  const opt = deriveOptimalRecipe(ctx);
+ // ← ここで最適化！（安全マージ）
+const derived = deriveOptimalRecipe(ctx) || ({} as any);
+const opt = {
+  ...base,
+  ...derived,
+  // 入れ子オブジェクトは個別にマージ＆フォールバック
+  pour: {
+    style: derived?.pour?.style ?? base.pour.style,
+    notes: derived?.pour?.notes ?? base.pour.notes,
+  },
+  // 数値は undefined/NaN を弾く
+  tempC: Number.isFinite(derived?.tempC) ? Number(derived.tempC) : base.tempC,
+  timeSec: Number.isFinite(derived?.timeSec) ? Number(derived.timeSec) : base.timeSec,
+  ratio: Number.isFinite(derived?.ratio) ? Number(derived.ratio) : base.ratio,
+} as typeof base & typeof derived;
 
   // 表示用
-  const mm = Math.floor(opt.timeSec / 60),
-    ss = String(opt.timeSec % 60).padStart(2, "0");
+const safeTime = Number.isFinite(opt?.timeSec) ? Number(opt.timeSec) : base.timeSec;
+const mm = Math.floor(safeTime / 60);
+const ss = String(safeTime % 60).padStart(2, "0");
 
   return (
     <div className="mt-1.5 space-y-1">
@@ -1228,11 +1242,10 @@ const DripperExplainer: React.FC<{ name: string; bean: any }> = ({
           <b>
             {mm}:{ss}
           </b>{" "}
-          ／ 比率 <b>1:{safeFixed(opt.ratio, 1)}</b>
-        </div>
+／ 比率 <b>1:{Number.isFinite(opt?.ratio) ? Number(opt.ratio).toFixed(1) : "—"}</b>        </div>
         <div className="text-[11px] text-gray-600">
-          抽出：{opt.pour.style}／メモ：
-          {(opt.pour.notes || []).join("・") || "—"}
+          抽出：{opt.pour?.style ?? "—"}／メモ：
+{(opt.pour?.notes ?? []).join("・") || "—"}
           {k.howto.pour ? ` ／ 器具ヒント：${k.howto.pour}` : ""}
         </div>
       </div>
