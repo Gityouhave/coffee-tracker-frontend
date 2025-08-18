@@ -624,6 +624,130 @@ const DRIPPER_PROFILE: Record<string, {clarity:number; body:number; oil:number; 
   'モカポット':    { clarity:0.35, body:0.9,  oil:0.7,  speed:0.8,  immersion:0.2 },
   'サイフォン':    { clarity:0.8,  body:0.55, oil:0.2,  speed:0.5,  immersion:0.4 },
 };
+
+// ---- 追加：根拠つきエビデンスメタ ----
+type DripperSource = { title:string; url:string };
+type DripperEvidence = {
+  features: string[];       // 形状/フィルタ/流路など、メーカー/標準に基づく客観情報
+  qualitative: string[];    // 「クリーン寄り」「厚み寄り」等の定性方向（学習/経験で一般化されている傾向）
+  sources: DripperSource[]; // 出典URL（公的/メーカー/教科書/百科など）
+};
+
+// 注意：features は客観、qualitative は方向性（モデルの前提）として扱う
+export const DRIPPER_EVIDENCE: Record<string, DripperEvidence> = {
+  'ハリオ': {
+    features: ['円すい・単穴', 'スパイラル状のリブ'],
+    qualitative: ['注湯依存で流速を作る→クリア寄りになりやすい'],
+    sources: [
+      { title: 'Hario V60 (Wikipedia)', url: 'https://en.wikipedia.org/wiki/Hario_V60' } // 円すい/単穴/リブの基本仕様
+    ]
+  },
+  'カリタウェーブ': {
+    features: ['平底','3つ穴','ウェーブペーパー'],
+    qualitative: ['湯面がフラットになりやすく均一抽出→バランス志向'],
+    sources: [
+      { title: 'Clive Coffee – Kalita Wave Guide', url: 'https://clivecoffee.com/blogs/learn/kalita-wave-brew-guide' } // 平底/3穴と抽出傾向
+    ]
+  },
+  'コーノ': {
+    features: ['円すい','リブが途中で終わる（上部は壁面密着しやすい）'],
+    qualitative: ['序盤は浸漬寄り→後半透過が立ちやすい＝甘み/粘性'],
+    sources: [
+      { title: 'KONO式ドリッパーの特徴（解説記事）', url: 'https://www.kurasu.kyoto/blogs/news/kono-dripper' }
+    ]
+  },
+  'クレバー': {
+    features: ['バルブ付で全量浸漬→レバー開放で落とす'],
+    qualitative: ['浸漬優位→甘み/ボディを出しやすい'],
+    sources: [
+      { title: 'Perfect Daily Grind – Cleverは浸漬+ドリップ', url: 'https://perfectdailygrind.com/2020/09/what-is-the-clever-dripper/' }
+    ]
+  },
+  'ハリオスイッチ': {
+    features: ['バルブON/OFFで浸漬⇄透過を切替'],
+    qualitative: ['甘み×クリアの両立を狙える可変型'],
+    sources: [
+      { title: 'HARIO COFFEE STATION（スイッチ解説）', url: 'https://coffee-station.hariocontactlab.com/entertainment/10' }
+    ]
+  },
+  'フレンチプレス': {
+    features: ['金属メッシュ・全浸漬'],
+    qualitative: ['オイル/微粉が残りやすく厚み寄り'],
+    sources: [
+      { title: 'Coffee filter (Wikipedia)', url: 'https://en.wikipedia.org/wiki/Coffee_filter' }
+    ]
+  },
+  'エアロプレス': {
+    features: ['加圧抽出（紙/金属フィルタ可）'],
+    qualitative: ['短時間・可変性が高い'],
+    sources: [
+      { title: 'AeroPress – Brew Guides', url: 'https://aeropress.com/pages/learn' }
+    ]
+  },
+  'サイフォン': {
+    features: ['加熱上昇→減圧ろ過（真空式）'],
+    qualitative: ['香りと透明感の両立（布/紙フィルタ）'],
+    sources: [
+      { title: 'SeriousEats – How siphon works（真空原理の解説）', url: 'https://www.seriouseats.com/best-siphon-coffee-makers-6746392' }
+    ]
+  },
+  'モカポット': {
+    features: ['加圧蒸気で高濃度抽出'],
+    qualitative: ['ビター/ボディ寄り、ミルク合わせ向き'],
+    sources: [
+      { title: 'Wikipedia – Moka pot', url: 'https://en.wikipedia.org/wiki/Moka_pot' }
+    ]
+  },
+  'フィン': {
+    features: ['金属フィルタの滴下式（ベトナム式）'],
+    qualitative: ['じんわり濃度上昇、甘苦凝縮'],
+    sources: [
+      { title: 'Nguyen Coffee Supply – What is a Phin?', url: 'https://nguyencoffeesupply.com/pages/what-is-a-phin' }
+    ]
+  },
+  'ネル': {
+    features: ['布濾し（オイル保持・目が細かい）'],
+    qualitative: ['厚みと余韻、管理前提'],
+    sources: [
+      { title: 'Coffee filter (Wikipedia) – 布フィルタ言及', url: 'https://en.wikipedia.org/wiki/Coffee_filter' }
+    ]
+  },
+  'フラワー': {
+    features: ['深いリブ・通気性重視の円すい'],
+    qualitative: ['香り立ち/高流速寄り'],
+    sources: [
+      { title: '製品解説（代表的な特徴まとめ）', url: 'https://www.kurasu.kyoto/blogs/learn/pour-over-drippers-compared' }
+    ]
+  },
+  'ブルーボトル': {
+    features: ['大径単穴・浅いリブ系（Blue Bottle Dripper）'],
+    qualitative: ['軽快にまとまりやすい'],
+    sources: [
+      { title: 'Blue Bottle Dripper（製品解説）', url: 'https://bluebottlecoffee.com/us/eng/products/blue-bottle-pourover-coffee-dripper' }
+    ]
+  },
+  'クリスタル': {
+    features: ['高透明感志向のリブ/ペーパー接触最適化設計'],
+    qualitative: ['微粉干渉を抑えやすく輪郭鋭く'],
+    sources: [
+      { title: '各種比較記事（通気と透明感）', url: 'https://www.kurasu.kyoto/blogs/learn/pour-over-drippers-compared' }
+    ]
+  },
+  '水出し': {
+    features: ['低温長時間の浸漬'],
+    qualitative: ['渋みが出にくく丸い甘み/低酸'],
+    sources: [
+      { title: 'SCA – Brew Temp（低温は規格外だが原理は浸漬）', url: 'https://sca.coffee' }
+    ]
+  },
+  'エスプレッソ': {
+    features: ['高圧短時間（~9bar, 25–30s）'],
+    qualitative: ['凝縮・厚み・余韻'],
+    sources: [
+      { title: 'Wikipedia – Espresso', url: 'https://en.wikipedia.org/wiki/Espresso' }
+    ]
+  },
+};
 const DRIPPER_RUNTIME: Record<string, { timeFactor?: number; tempOffset?: number }> = {
   'カリタウェーブ': { timeFactor: 1.10, tempOffset: -1 },
   'クリスタル':     { timeFactor: 0.90, tempOffset: -1 },
@@ -639,6 +763,17 @@ type DripPick = { name: string; short: string; desc: string; tags: string[]; rea
 type Reason = { label: string; sign: '+'|'-'; weight: number };
 
 export function pickRecommendedDrippers(args:{
+  export const SCORE_WEIGHTS = {
+  rule: 0.5,   // ルール（焙煎/精製/産地 からの相性）… 根拠=出典×モデル前提
+  profile: 0.3,// 器具プロファイル×ターゲットの類似（定性方向の数理化）
+  empirical: 0.2, // 実績（ウィルソン下限）… ノイズ耐性
+};
+  const ORIGIN_GROUPS = {
+  aroma: ['エチオピア','ケニア','ルワンダ','ブルンジ','コロンビア','グアテマラ','パナマ','ボリビア','タンザニア','DRコンゴ'],
+  heavy: ['インドネシア','スマトラ','マンデリン','ブラジル','ウガンダ','インド','ベトナム','ラオス'],
+};
+const aromaOrigin = new RegExp(ORIGIN_GROUPS.aroma.join('|'));
+const heavyOrigin = new RegExp(ORIGIN_GROUPS.heavy.join('|'));
   bean?:any; beanStats?:any|null; useEmpiricalRanking?: boolean;
   limit?: number|'all';
   /** ランキングの目的関数（UIの指標と連動） */
@@ -1842,6 +1977,22 @@ const splitForNiceRows = (nodes: React.ReactNode[]) => {
       <input type="checkbox" checked={showDripperBlocks} onChange={()=>setShowDripperBlocks(v=>!v)} />
       ドリッパー表示
     </label>
+    {/* 重みプリセット（任意） */}
+<div className="inline-flex items-center gap-2">
+  <span className="text-gray-500">重み</span>
+  <button type="button" className="px-1.5 py-0.5 text-[11px] border rounded"
+    onClick={()=> Object.assign(SCORE_WEIGHTS, {rule:.4, profile:.4, empirical:.2})}>
+    バランス
+  </button>
+  <button type="button" className="px-1.5 py-0.5 text-[11px] border rounded"
+    onClick={()=> Object.assign(SCORE_WEIGHTS, {rule:.2, profile:.3, empirical:.5})}>
+    実績重視
+  </button>
+  <button type="button" className="px-1.5 py-0.5 text-[11px] border rounded"
+    onClick={()=> Object.assign(SCORE_WEIGHTS, {rule:.6, profile:.3, empirical:.1})}>
+    理論重視
+  </button>
+</div>
 
     {/* 追加：TOP5だけ / 全部 */}
     <div className="inline-flex items-center gap-2">
@@ -2193,6 +2344,27 @@ const DripperList: React.FC<{
 
               <p className="mt-1 text-[12px] leading-5 text-gray-800">{d.desc}</p>
               <DripperExplainer name={d.name} bean={bean} />
+              {/* 出典（メーカー/百科/学術/業界標準） */}
+{DRIPPER_EVIDENCE[d.name]?.sources?.length>0 && (
+  <div className="mt-1.5 flex flex-wrap gap-1">
+    {DRIPPER_EVIDENCE[d.name].sources.map((s,i)=>(
+      <a key={i} href={s.url} target="_blank" rel="noreferrer"
+         className="text-[10px] px-1.5 py-0.5 rounded border bg-white hover:bg-gray-50 text-blue-700 underline">
+        出典: {s.title}
+      </a>
+    ))}
+  </div>
+)}
+{/* 定性根拠（モデル前提の明示） */}
+{DRIPPER_EVIDENCE[d.name]?.qualitative?.length>0 && (
+  <div className="mt-1.5 flex flex-wrap gap-1">
+    {DRIPPER_EVIDENCE[d.name].qualitative.map((q,i)=>(
+      <span key={i} className="text-[10px] px-1.5 py-0.5 rounded border bg-gray-50 text-gray-700">
+        前提: {q}
+      </span>
+    ))}
+  </div>
+)}
 
               {/* 固有特性 */}
               {d.tags?.length>0 && (
