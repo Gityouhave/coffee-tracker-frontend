@@ -1004,6 +1004,7 @@ export function DripForm({API, beans, onSaved}:{API:string; beans:any[]; onSaved
   const [beanDrips, setBeanDrips] = useState<any[]>([])
   const [allDrips, setAllDrips] = useState<any[]>([])
   // 実績スイッチ：ランキング反映と表示を独立制御
+const [weightVersion, setWeightVersion] = useState(0);  
 const [useEmpiricalRanking, setUseEmpiricalRanking] = useState(true);
 const [showEmpiricalReasons, setShowEmpiricalReasons] = useState(true);
 
@@ -1375,7 +1376,6 @@ const dripperList = useMemo(
   () => listMode === 'top5' ? recommendedDrippers : allDrippersOrdered,
   [listMode, recommendedDrippers, allDrippersOrdered]
 );
-  const [weightVersion, setWeightVersion] = useState(0);
   // ★ 追加：TOP5を全体から除外
 const allDrippersExceptTop = useMemo(()=>{
   const topNames = new Set(recommendedDrippers.map(d=> String(d.name||'').trim()));
