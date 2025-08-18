@@ -2323,6 +2323,31 @@ const splitForNiceRows = (nodes: React.ReactNode[]) => {
 }
 
 // ランキングNo.常時・正負色分け・総合点バッジ表示版
+// ランキングNo.常時・正負色分け・総合点バッジ表示版
+// === Tag color mapping (焙煎/精製/産地/風味/抽出/流速/その他) ===
+const TAG_COLOR_CLASS = (cat: string) => {
+  const k = String(cat).trim();
+  return k === '焙煎'   ? 'bg-amber-50  text-amber-800  border-amber-200'
+       : k === '精製'   ? 'bg-blue-50   text-blue-700   border-blue-200'
+       : k === '産地'   ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
+       : k === '風味'   ? 'bg-orange-50 text-orange-700 border-orange-200'
+       : k === '抽出'   ? 'bg-violet-50 text-violet-700 border-violet-200'
+       : k === '流速'   ? 'bg-rose-50   text-rose-700   border-rose-200'
+       :                  'bg-gray-50   text-gray-700   border-gray-200';
+};
+const tagClassFor = (raw: string) => {
+  const m = String(raw || '').match(/^(\S+)\s*:/); // 先頭「カテゴリ:」
+  const head = m ? m[1] : 'その他';
+  // 正規化（同義語→標準カテゴリ）
+  const norm =
+    head === '焙煎' || head === '焙煎度' ? '焙煎' :
+    head === '精製' || head === '精製方法' ? '精製' :
+    head === '産地' ? '産地' :
+    head === '風味' ? '風味' :
+    head === '抽出' || head === '抽出形式' ? '抽出' :
+    head === '流速' ? '流速' : 'その他';
+  return TAG_COLOR_CLASS(norm);
+};
 const DripperList: React.FC<{
   title: string;
   bean:any; items: Array<{
@@ -2399,11 +2424,14 @@ const DripperList: React.FC<{
 {/* 基本タグ（短い特徴） */}
 {(d.tags||[]).length>0 && (
   <div className="mt-1.5 flex flex-wrap gap-1">
-    {d.tags.map((t,i)=>(
-      <span key={i} className="text-[10px] px-1.5 py-0.5 rounded border bg-gray-50 text-gray-700">
-        {t}
-      </span>
-    ))}
+    {d.tags.map((t,i)=> {
+      const cls = tagClassFor(String(t));
+      return (
+        <span key={i} className={`text-[10px] px-1.5 py-0.5 rounded border ${cls}`}>
+          {t}
+        </span>
+      );
+    })}
   </div>
 )}
 
