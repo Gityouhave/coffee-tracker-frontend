@@ -1123,7 +1123,9 @@ const DRIPPER_KNOWHOW: Record<string, DripperKnowhow> = {
     ],
   },
 };
-// 説明欄（desc）の直下に強み/弱み/最適手法を出すレンダラ
+// src/components/DripForm.tsx など同ファイル内
+import { deriveOptimalRecipe } from "../utils/recipeEngine"; // ← 追加import
+
 const DripperExplainer: React.FC<{ name: string; bean: any }> = ({
   name,
   bean,
@@ -1131,39 +1133,72 @@ const DripperExplainer: React.FC<{ name: string; bean: any }> = ({
   const k = DRIPPER_KNOWHOW[name];
   if (!k) return null;
 
-  // 豆側の推奨（焙煎度・粒度から）
+  // 既存の recommendForDrip で焙煎に基づく温度/時間のベースを作る
   const rec = recommendForDrip({
     roast_level: bean?.roast_level,
     derive: null,
     label20: null,
   });
 
-  const t = k.howto.tempC ?? rec.recTemp;
-  const hmsToSec = (txt: string) => {
-    const parts = txt.split(":").map(Number);
-    if (parts.length === 3)
-      return (parts[0] || 0) * 3600 + (parts[1] || 0) * 60 + (parts[2] || 0);
-    if (parts.length === 2) return (parts[0] || 0) * 60 + (parts[1] || 0);
+  // ベースレシピ（器具howto優先、無ければrec）
+  const baseTimeSec = (() => {
+    const txt = k.howto.time;
+    if (!txt) return rec.recTime ?? 150;
+    const ps = txt.split(":").map(Number);
+    if (ps.length === 3)
+      return (ps[0] || 0) * 3600 + (ps[1] || 0) * 60 + (ps[2] || 0);
+    if (ps.length === 2) return (ps[0] || 0) * 60 + (ps[1] || 0);
     const n = Number(txt);
-    return Number.isFinite(n) ? n : 0;
-  };
-  const secToHMMSS = (s: number) => {
-    const h = Math.floor(s / 3600),
-      m = Math.floor((s % 3600) / 60),
-      ss = s % 60;
-    if (h > 0)
-      return `${h}:${String(m).padStart(2, "0")}:${String(ss).padStart(
-        2,
-        "0"
-      )}`;
-    return `${m}:${String(ss).padStart(2, "0")}`;
+    return Number.isFinite(n) ? n : rec.recTime ?? 150;
+  })();
+
+  const ratioFromHint = Number(
+    (k.howto.ratioHint || "").match(/1:(\d+(\.\d+)?)/)?.[1] ?? 15
+  );
+
+  const base = {
+    grindGroup: k.howto.grindGroup,
+    tempC: Number.isFinite(k.howto.tempC) ? k.howto.tempC! : rec.recTemp ?? 82,
+    timeSec: baseTimeSec,
+    ratio: ratioFromHint,
+    pour: { style: "pulse" as const, notes: [] },
   };
 
-  const baseSec = k.howto.time ? hmsToSec(k.howto.time) : rec.recTime ?? 0;
-  const s = Number.isFinite(baseSec) && baseSec > 0 ? secToHMMSS(baseSec) : "—";
+  // エイジング日数（焙煎日が無ければ null）
+  const agingDays = (() => {
+    const roastDate =
+      bean?.roast_date ||
+      bean?.roasted_on ||
+      bean?.purchase_date ||
+      bean?.purchased_on;
+    if (!roastDate) return null;
+    const today = new Date().toISOString().slice(0, 10);
+    return Math.floor(
+      (new Date(today).getTime() - new Date(String(roastDate)).getTime()) /
+        (1000 * 60 * 60 * 24)
+    );
+  })();
+
+  // 文脈
+  const ctx = {
+    dripper: name,
+    roast: String(bean?.roast_level || ""),
+    process: [bean?.process, bean?.addl_process].filter(Boolean).join(" "),
+    origin: String(bean?.origin || ""),
+    agingDays,
+    base,
+  };
+
+  // ← ここで最適化！
+  const opt = deriveOptimalRecipe(ctx);
+
+  // 表示用
+  const mm = Math.floor(opt.timeSec / 60),
+    ss = String(opt.timeSec % 60).padStart(2, "0");
 
   return (
     <div className="mt-1.5 space-y-1">
+      {/* 強み/注意：既存のまま */}
       <div className="flex flex-wrap gap-1">
         {k.pros.map((p, i) => (
           <span
@@ -1183,18 +1218,24 @@ const DripperExplainer: React.FC<{ name: string; bean: any }> = ({
         ))}
       </div>
 
-      {/* 最適手法（要点） */}
+      {/* 最適化後レシピの表出 */}
       <div className="text-[12px] leading-5 text-gray-800">
         <div>
-          最適手法：粒度 <b>{k.howto.grindGroup}</b> ／ 目安温度{" "}
-          <b>{Number.isFinite(t) ? `${t}℃` : "—"}</b> ／ 目安時間 <b>{s}</b>
+          最適手法：粒度 <b>{opt.grindGroup}</b> ／ 目安温度{" "}
+          <b>{Math.round(opt.tempC)}℃</b> ／ 目安時間{" "}
+          <b>
+            {mm}:{ss}
+          </b>{" "}
+          ／ 比率 <b>1:{opt.ratio.toFixed(1)}</b>
         </div>
         <div className="text-[11px] text-gray-600">
-          {k.howto.pour ? `注湯：${k.howto.pour}` : ""}{" "}
-          {k.howto.ratioHint ? `／ レシオ目安：${k.howto.ratioHint}` : ""}
+          抽出：{opt.pour.style}／メモ：
+          {(opt.pour.notes || []).join("・") || "—"}
+          {k.howto.pour ? ` ／ 器具ヒント：${k.howto.pour}` : ""}
         </div>
       </div>
 
+      {/* 相性の例（元のまま） */}
       {k.examples?.length > 0 && (
         <div className="mt-1.5">
           <div className="text-[12px] font-medium text-gray-700">相性の例</div>
