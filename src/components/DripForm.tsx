@@ -1127,7 +1127,27 @@ const DRIPPER_KNOWHOW: Record<string, DripperKnowhow> = {
 };
 // src/components/DripForm.tsx など同ファイル内
 import { deriveOptimalRecipe } from "../utils/recipeEngine"; // ← 追加import
+// === 安全な数値/レシピ正規化ヘルパー（DripperExplainer専用） ===
+type PourPlan = { style: string; notes: string[] };
+const finiteOr = (v: any, def: number) =>
+  Number.isFinite(Number(v)) ? Number(v) : def;
 
+const normalizeRecipe = (
+  raw: any,
+  base: { grindGroup: string; tempC: number; timeSec: number; ratio: number; pour?: Partial<PourPlan> }
+) => {
+  const ratio = finiteOr(raw?.ratio, base.ratio);
+  const tempC = finiteOr(raw?.tempC, base.tempC);
+  const timeSec = finiteOr(raw?.timeSec, base.timeSec);
+  const grindGroup = String(raw?.grindGroup || base.grindGroup || "");
+
+  const poured: PourPlan = {
+    style: String(raw?.pour?.style || base?.pour?.style || "pulse"),
+    notes: Array.isArray(raw?.pour?.notes) ? raw.pour.notes : [],
+  };
+
+  return { ratio, tempC, timeSec, grindGroup, pour: poured };
+};
 const DripperExplainer: React.FC<{ name: string; bean: any }> = ({
   name,
   bean,
@@ -1251,17 +1271,18 @@ const ratioText = Number.isFinite(opt.ratio)
       {/* 最適化後レシピの表出 */}
       <div className="text-[12px] leading-5 text-gray-800">
         <div>
-          最適手法：粒度 <b>{opt.grindGroup}</b> ／ 目安温度{" "}
-          <b>{Math.round(opt.tempC)}℃</b> ／ 目安時間{" "}
-          <b>
-            {mm}:{ss}
-          </b>{" "}
-／ 比率 <b>1:{Number.isFinite(opt?.ratio) ? Number(opt.ratio).toFixed(1) : "—"}</b>        </div>
-        <div className="text-[11px] text-gray-600">
-          抽出：{opt.pour?.style ?? "—"}／メモ：
-{(opt.pour?.notes ?? []).join("・") || "—"}
-          {k.howto.pour ? ` ／ 器具ヒント：${k.howto.pour}` : ""}
+          最適手法：粒度 <b>{opt.grindGroup || "—"}</b> ／ 目安温度{" "}
+<b>{Number.isFinite(opt.tempC) ? Math.round(opt.tempC) + "℃" : "—"}</b> ／ 目安時間{" "}
+<b>
+  {Number.isFinite(opt.timeSec) ? `${mm}:${ss}` : "—"}
+</b>{" "}
+／ 比率 <b>1:{Number.isFinite(opt.ratio) ? opt.ratio.toFixed(1) : "—"}</b>   
         </div>
+        <div className="text-[11px] text-gray-600">
+  抽出：{opt.pour?.style || "—"}／メモ：
+  {(opt.pour?.notes?.length ? opt.pour.notes.join("・") : "—")}
+  {k.howto.pour ? ` ／ 器具ヒント：${k.howto.pour}` : ""}
+</div>
       </div>
 
       {/* 相性の例（元のまま） */}
