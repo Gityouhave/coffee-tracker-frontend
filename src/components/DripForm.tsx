@@ -4083,6 +4083,11 @@ const DripperList: React.FC<{
                 <span className="text-[10px] px-1.5 py-0.5 rounded bg-blue-50 border text-blue-700">
                   #{d.rank}
                 </span>
+                <b className="text-[15px]">{d.name}</b>
+                <span className="text-xs text-gray-600 truncate">
+                  — {d.short}
+                </span>
+
                 <span
                   className={`ml-auto text-[10px] px-1.5 py-0.5 rounded border ${nBadgeClass(
                     Number(d.n || 0)
@@ -4094,6 +4099,7 @@ const DripperList: React.FC<{
                   総合 {d.score}
                 </span>
               </div>
+
               <div className="flex items-center gap-2">
                 <b className="text-[15px]">{d.name}</b>
                 <span className="text-xs text-gray-600 truncate">
