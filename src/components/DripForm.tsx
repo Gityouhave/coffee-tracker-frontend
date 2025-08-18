@@ -612,7 +612,7 @@ const s = Number.isFinite(baseSec) && baseSec>0 ? secToHMMSS(baseSec) : '—';
         {k.howto.pour ? `注湯：${k.howto.pour}` : ''} {k.howto.ratioHint ? `／ レシオ目安：${k.howto.ratioHint}` : ''}
       </div>
     </div>
-    // DripperExplainer 内、return の末尾あたりに追加
+    
 {k.examples?.length > 0 && (
   <div className="mt-1.5">
     <div className="text-[12px] font-medium text-gray-700">相性の例</div>
@@ -2401,7 +2401,7 @@ const DripperList: React.FC<{
     ))}
   </div>
 )}
-              // DripperList の各 li 内、qualitative タグのあとに追加
+              
 {DRIPPER_EVIDENCE[d.name]?.features?.length > 0 && (
   <div className="mt-1.5 flex flex-wrap gap-1">
     {DRIPPER_EVIDENCE[d.name].features.map((f,i)=>(
