@@ -1799,31 +1799,23 @@ export function pickRecommendedDrippers(args: {
       const { rule: w_rule, profile: w_prof, empirical: w_emp } = SCORE_WEIGHTS;
       const score = round2(w_rule * ruleN + w_prof * profN + w_emp * empN);
 
-      const legacyReasons = byMethod.find((x) => x.dripper === name)
-        ? [
-            `実績: 平均${byMethod
-              .find((x) => x.dripper === name)!
-              .avg_overall.toFixed(1)}（n=${
-              byMethod.find((x) => x.dripper === name)!.count || 0
-            }）`,
-          ]
-        : [];
+      const bmEntry = byMethod.find(x => x.dripper === name);
+const n = Number(bmEntry?.count || 0);
+const avg_overall = Number(bmEntry?.avg_overall);
+
+const legacyReasons =
+  bmEntry && Number.isFinite(avg_overall)
+    ? [`実績: 平均${avg_overall.toFixed(1)}（n=${n}）`]
+    : [];
       const bmEntry = byMethod.find((x) => x.dripper === name);
       const n = Number(bmEntry?.count || 0);
       const avg_overall = Number(bmEntry?.avg_overall ?? NaN);
 
       return {
-        name,
-        short: d.short,
-        desc: d.desc,
-        tags: d.tags,
-        reasons: legacyReasons,
-        reasons2: reasons,
-        score,
-        rank: 0,
-        n,
-        avg_overall,
-      } as (DripPick & { score: number; rank: number; reasons2: Reason[] }) & {
+  name, short:d.short, desc:d.desc, tags:d.tags,
+  reasons: legacyReasons, reasons2: reasons, score, rank: 0,
+  n, avg_overall
+}; as (DripPick & { score: number; rank: number; reasons2: Reason[] }) & {
         n: number;
         avg_overall: number;
       };
