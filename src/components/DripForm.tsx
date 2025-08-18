@@ -7,9 +7,19 @@ import {
 } from 'recharts'
 import { flagify, flagifyOriginList, splitOrigins } from '../utils/flags'
 
+
 import { filterSortBeans, beanOptionLabel, ROASTS } from '../utils/beanFilters'
 import { ORIGINS } from '../constants/origins'
 import { ORIGIN_THEORIES } from '../constants/originTheories'
+// === scoring config (top-level) ===
+export const SCORE_WEIGHTS = { rule: 0.5, profile: 0.3, empirical: 0.2 };
+
+const ORIGIN_GROUPS = {
+  aroma: ['エチオピア','ケニア','ルワンダ','ブルンジ','コロンビア','グアテマラ','パナマ','ボリビア','タンザニア','DRコンゴ'],
+  heavy: ['インドネシア','スマトラ','マンデリン','ブラジル','ウガンダ','インド','ベトナム','ラオス'],
+};
+const aromaOrigin = new RegExp(ORIGIN_GROUPS.aroma.join('|'));
+const heavyOrigin = new RegExp(ORIGIN_GROUPS.heavy.join('|'));
 // ファイル先頭付近（importの下あたり）に追加
 const ChartFrame: React.FC<React.PropsWithChildren<{ aspect?: number; className?: string }>> = ({ aspect = 1, className, children }) => {
   // aspect比で高さを決める共通枠。親の幅に応じて自動で高さ調整。
@@ -763,20 +773,8 @@ type DripPick = { name: string; short: string; desc: string; tags: string[]; rea
 type Reason = { label: string; sign: '+'|'-'; weight: number };
 
 export function pickRecommendedDrippers(args:{
-  export const SCORE_WEIGHTS = {
-  rule: 0.5,   // ルール（焙煎/精製/産地 からの相性）… 根拠=出典×モデル前提
-  profile: 0.3,// 器具プロファイル×ターゲットの類似（定性方向の数理化）
-  empirical: 0.2, // 実績（ウィルソン下限）… ノイズ耐性
-};
-  const ORIGIN_GROUPS = {
-  aroma: ['エチオピア','ケニア','ルワンダ','ブルンジ','コロンビア','グアテマラ','パナマ','ボリビア','タンザニア','DRコンゴ'],
-  heavy: ['インドネシア','スマトラ','マンデリン','ブラジル','ウガンダ','インド','ベトナム','ラオス'],
-};
-const aromaOrigin = new RegExp(ORIGIN_GROUPS.aroma.join('|'));
-const heavyOrigin = new RegExp(ORIGIN_GROUPS.heavy.join('|'));
   bean?:any; beanStats?:any|null; useEmpiricalRanking?: boolean;
   limit?: number|'all';
-  /** ランキングの目的関数（UIの指標と連動） */
   objective?: 'overall'|'clean'|'flavor'|'body';
 }): Array<DripPick & { score:number; rank:number; reasons2:Reason[] }> {
   const { bean, beanStats, useEmpiricalRanking = true, objective='overall' } = args || {};
@@ -838,8 +836,6 @@ const heavyOrigin = new RegExp(ORIGIN_GROUPS.heavy.join('|'));
   }
 
   // --- 産地（ざっくり傾向） ---
-  const aromaOrigin = /(エチオピア|ケニア|ルワンダ|ブルンジ|コロンビア|グアテマラ)/;
-  const heavyOrigin = /(インドネシア|スマトラ|マンデリン|ブラジル)/;
   if (aromaOrigin.test(origin)){
     ['フラワー','ハリオ','カリタウェーブ','クリスタル'].forEach(n=> add(n,'産地: 香り重視の豆は輪郭と香りを出しやすい', +1.0));
   }
@@ -916,7 +912,7 @@ const heavyOrigin = new RegExp(ORIGIN_GROUPS.heavy.join('|'));
     const empN = useEmpiricalRanking ? (emp01(name)*2 - 1) : 0;
 
     // 合成（重みは保守的に：ルール0.5 / プロファイル0.3 / 実績0.2）
-    const w_rule = 0.5, w_prof = 0.3, w_emp = 0.2;
+   const { rule: w_rule, profile: w_prof, empirical: w_emp } = SCORE_WEIGHTS;
     const score = round2(w_rule*ruleN + w_prof*profN + w_emp*empN);
 
     const legacyReasons = (
@@ -1362,7 +1358,7 @@ const recommendedDrippers = useMemo(
     bean: selBean, beanStats, useEmpiricalRanking,
     objective: yMetric as 'overall'|'clean'|'flavor'|'body'
   }),
-  [selBean, beanStats?.by_method, useEmpiricalRanking, yMetric]
+  [selBean, beanStats?.by_method, useEmpiricalRanking, yMetric, weightVersion]
 );
 
 // 全ドリッパー（おすすめ順・全件）
@@ -1371,7 +1367,7 @@ const allDrippersOrdered = useMemo(
     bean: selBean, beanStats, useEmpiricalRanking, limit: 'all',
     objective: yMetric as 'overall'|'clean'|'flavor'|'body'
   }),
-  [selBean, beanStats?.by_method, useEmpiricalRanking, yMetric]
+  [selBean, beanStats?.by_method, useEmpiricalRanking, yMetric, weightVersion]
 );
 
 // 表示切替用（TOP5 or 全部）
@@ -1379,6 +1375,7 @@ const dripperList = useMemo(
   () => listMode === 'top5' ? recommendedDrippers : allDrippersOrdered,
   [listMode, recommendedDrippers, allDrippersOrdered]
 );
+  const [weightVersion, setWeightVersion] = useState(0);
   // ★ 追加：TOP5を全体から除外
 const allDrippersExceptTop = useMemo(()=>{
   const topNames = new Set(recommendedDrippers.map(d=> String(d.name||'').trim()));
@@ -1977,19 +1974,31 @@ const splitForNiceRows = (nodes: React.ReactNode[]) => {
       <input type="checkbox" checked={showDripperBlocks} onChange={()=>setShowDripperBlocks(v=>!v)} />
       ドリッパー表示
     </label>
-    {/* 重みプリセット（任意） */}
+   {/* 重みプリセット（任意） */}
 <div className="inline-flex items-center gap-2">
   <span className="text-gray-500">重み</span>
-  <button type="button" className="px-1.5 py-0.5 text-[11px] border rounded"
-    onClick={()=> Object.assign(SCORE_WEIGHTS, {rule:.4, profile:.4, empirical:.2})}>
+
+  <button
+    type="button"
+    className="px-1.5 py-0.5 text-[11px] border rounded"
+    onClick={() => { Object.assign(SCORE_WEIGHTS, { rule: .4, profile: .4, empirical: .2 }); setWeightVersion(v => v + 1); }}
+  >
     バランス
   </button>
-  <button type="button" className="px-1.5 py-0.5 text-[11px] border rounded"
-    onClick={()=> Object.assign(SCORE_WEIGHTS, {rule:.2, profile:.3, empirical:.5})}>
+
+  <button
+    type="button"
+    className="px-1.5 py-0.5 text-[11px] border rounded"
+    onClick={() => { Object.assign(SCORE_WEIGHTS, { rule: .2, profile: .3, empirical: .5 }); setWeightVersion(v => v + 1); }}
+  >
     実績重視
   </button>
-  <button type="button" className="px-1.5 py-0.5 text-[11px] border rounded"
-    onClick={()=> Object.assign(SCORE_WEIGHTS, {rule:.6, profile:.3, empirical:.1})}>
+
+  <button
+    type="button"
+    className="px-1.5 py-0.5 text-[11px] border rounded"
+    onClick={() => { Object.assign(SCORE_WEIGHTS, { rule: .6, profile: .3, empirical: .1 }); setWeightVersion(v => v + 1); }}
+  >
     理論重視
   </button>
 </div>
@@ -2345,70 +2354,70 @@ const DripperList: React.FC<{
               <p className="mt-1 text-[12px] leading-5 text-gray-800">{d.desc}</p>
               <DripperExplainer name={d.name} bean={bean} />
               {/* 出典（メーカー/百科/学術/業界標準） */}
-{DRIPPER_EVIDENCE[d.name]?.sources?.length>0 && (
-  <div className="mt-1.5 flex flex-wrap gap-1">
-    {DRIPPER_EVIDENCE[d.name].sources.map((s,i)=>(
-      <a key={i} href={s.url} target="_blank" rel="noreferrer"
-         className="text-[10px] px-1.5 py-0.5 rounded border bg-white hover:bg-gray-50 text-blue-700 underline">
-        出典: {s.title}
-      </a>
-    ))}
-  </div>
-)}
-{/* 定性根拠（モデル前提の明示） */}
 {DRIPPER_EVIDENCE[d.name]?.qualitative?.length>0 && (
   <div className="mt-1.5 flex flex-wrap gap-1">
     {DRIPPER_EVIDENCE[d.name].qualitative.map((q,i)=>(
-      <span key={i} className="text-[10px] px-1.5 py-0.5 rounded border bg-gray-50 text-gray-700">
-        前提: {q}
+      <span key={i} className="text-[10px] px-1.5 py-0.5 rounded border bg-white text-gray-700">
+        根拠: {q}
       </span>
     ))}
   </div>
 )}
 
-              {/* 固有特性 */}
-              {d.tags?.length>0 && (
-                <div className="mt-1.5 flex flex-wrap gap-1">
-                  {d.tags.map((t,i)=>(
-                    <span key={i} className="text-[10px] px-1.5 py-0.5 rounded bg-gray-100 border text-gray-700">{t}</span>
-                  ))}
-                </div>
-              )}
+{/* ルール相性の理由（正負色分け） */}
+{d.reasons2?.length>0 && (
+  <div className="mt-1.5 flex flex-wrap gap-1">
+    {d.reasons2.map((r,i)=>(
+      <span
+        key={i}
+        className={
+          "text-[10px] px-1.5 py-0.5 rounded border " +
+          (r.sign==='+' ? "bg-emerald-50 text-emerald-700" : "bg-rose-50 text-rose-700")
+        }
+        title={`weight=${r.weight}`}
+      >
+        {r.sign}{r.label}
+      </span>
+    ))}
+  </div>
+)}
 
-              {/* 相性（＋緑 / −赤） */}
-              {d.reasons2?.length>0 && (
-                <div className="mt-1.5 flex flex-wrap gap-1">
-                  {d.reasons2.map((r,i)=>(
-                    <span key={i}
-                      className={`text-[10px] px-1.5 py-0.5 rounded border ${
-                        r.sign==='+' ? 'bg-green-50 text-green-700 border-green-200' : 'bg-red-50 text-red-700 border-red-200'
-                      }`}
-                      title={`${r.sign}${r.weight}`}
-                    >
-                      {r.sign==='+'?'相性＋':'相性−'} {r.label}
-                    </span>
-                  ))}
-                </div>
-              )}
+{/* 実績タグ（表示ONのときだけ） */}
+{/* 実績タグ（表示ONのときだけ） */}
+{showEmpiricalReasons && (d.reasons||[]).some(x=>String(x).startsWith('実績:')) && (
+  <div className="mt-1.5 flex flex-wrap gap-1">
+    {(d.reasons||[])
+      .filter(x=>String(x).startsWith('実績:'))
+      .map((t,i)=>(
+        <span key={i} className="text-[10px] px-1.5 py-0.5 rounded border bg-indigo-50 text-indigo-700">
+          {t}
+        </span>
+      ))}
+  </div>
+)}
 
-              {/* 実績（任意表示） */}
-              {empiricalTags.length>0 && showEmpiricalReasons && (
-                <div className="mt-1.5 flex flex-wrap gap-1">
-                  {empiricalTags.map((r,i)=>(
-                    <span key={i} className="text-[10px] px-1 py-0.5 rounded bg-blue-50 border text-blue-700">{r}</span>
-                  ))}
-                </div>
-              )}
+{/* 基本タグ（短い特徴） */}
+{(d.tags||[]).length>0 && (
+  <div className="mt-1.5 flex flex-wrap gap-1">
+    {d.tags.map((t,i)=>(
+      <span key={i} className="text-[10px] px-1.5 py-0.5 rounded border bg-gray-50 text-gray-700">
+        {t}
+      </span>
+    ))}
+  </div>
+)}
 
-              <div className="mt-2 flex gap-2">
-                <button
-                  type="button"
-                  onClick={()=> onPick(d.name)}
-                  className="px-2 py-1 rounded border text-[11px] bg-white hover:bg-gray-50"
-                >
-                  適用
-                </button>
-              </div>
+{/* このドリッパーを選ぶ */}
+<div className="mt-2">
+  <button
+    type="button"
+    className="px-2 py-1 rounded border bg-white hover:bg-gray-50 text-xs"
+    onClick={()=> onPick(d.name)}
+  >
+    このドリッパーを選ぶ
+  </button>
+</div>
+                
             </li>
           );
         })}
