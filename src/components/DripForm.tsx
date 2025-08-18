@@ -2405,6 +2405,9 @@ const DripperList: React.FC<{
 }> = ({ title, bean, items, showEmpiricalReasons, onPick, onApplySuggested }) => {
   const [expandReasons, setExpandReasons] = React.useState<Record<string, boolean>>({});
   const toggleReasons = (name:string)=> setExpandReasons(s=>({ ...s, [name]: !s[name] }));
+  // DripperList 冒頭の state 群に追加
+const [expandTags, setExpandTags] = React.useState<Record<string, boolean>>({});
+const toggleTags = (name:string)=> setExpandTags(s=>({ ...s, [name]: !s[name] }));
 
   return (
     <div className="border rounded">
@@ -2416,7 +2419,7 @@ const DripperList: React.FC<{
         {items.map((d)=> {
           const empiricalTags = (d.reasons||[]).filter(r => String(r).startsWith('実績:'));
           const showAll = !!expandReasons[d.name];
-          const reasonsShown = (d.reasons2||[]).slice(0, showAll ? d.reasons2.length : 2);
+          const reasonsShown = (d.reasons2||[]).slice(0, showAll ? d.reasons2.length : 3);
           const remain = Math.max(0, (d.reasons2?.length||0) - reasonsShown.length);
 
           // タグ4つに制限
@@ -2437,26 +2440,34 @@ const DripperList: React.FC<{
                 <span className="text-[11px] px-1.5 py-0.5 rounded border bg-gray-50">総合 {d.score}</span>
               </div>
 
-              {/* 2行目：この豆向け推奨レシピ（粒度/温度/時間/比率）＋操作 */}
-              <div className="flex items-center gap-2 text-[12px] text-gray-800">
-                <DripperExplainer name={d.name} bean={bean} />
-                <div className="ml-auto flex items-center gap-1">
-                  <button
-                    type="button"
-                    className="px-2 py-1 rounded border bg-white hover:bg-gray-50 text-xs"
-                    onClick={()=> onPick(d.name)}
-                  >
-                    このドリッパーを選ぶ
-                  </button>
-                  <button
-                    type="button"
-                    className="px-2 py-1 rounded border bg-white hover:bg-gray-50 text-xs"
-                    onClick={()=> onApplySuggested(d.name)}
-                  >
-                    推奨レシピを適用
-                  </button>
-                </div>
-              </div>
+              {/* 2行目：推奨レシピ＆相性の例は折りたたみ */}
+<div className="flex items-center gap-2 text-[12px] text-gray-800">
+  <details className="flex-1">
+    <summary className="cursor-pointer select-none text-[12px] text-gray-700">
+      推奨レシピ・相性の例
+    </summary>
+    <div className="pt-1.5">
+      <DripperExplainer name={d.name} bean={bean} />
+    </div>
+  </details>
+
+  <div className="ml-auto flex items-center gap-1">
+    <button
+      type="button"
+      className="px-2 py-1 rounded border bg-white hover:bg-gray-50 text-xs"
+      onClick={()=> onPick(d.name)}
+    >
+      このドリッパーを選ぶ
+    </button>
+    <button
+      type="button"
+      className="px-2 py-1 rounded border bg-white hover:bg-gray-50 text-xs"
+      onClick={()=> onApplySuggested(d.name)}
+    >
+      推奨レシピを適用
+    </button>
+  </div>
+</div>
 
               {/* 理由（上位2つだけ）＋もっと見る */}
               {reasonsShown.length>0 && (
@@ -2505,24 +2516,39 @@ const DripperList: React.FC<{
                 </div>
               )}
 
-              {/* 基本タグ（4つまで） */}
-              {(shownTags.length>0) && (
-                <div className="mt-1 flex flex-wrap gap-1">
-                  {shownTags.map((t,i)=> {
-                    const cls = tagClassFor(String(t));
-                    return (
-                      <span key={i} className={`text-[10px] px-1.5 py-0.5 rounded border ${cls}`}>
-                        {t}
-                      </span>
-                    );
-                  })}
-                  {remainTags>0 && (
-                    <span className="text-[10px] px-1.5 py-0.5 rounded border bg-gray-50 text-gray-600">
-                      +{remainTags}
-                    </span>
-                  )}
-                </div>
-              )}
+              {/* 基本タグ（開閉式） */}
+{(d.tags?.length>0) && (
+  <div className="mt-1 flex flex-wrap gap-1">
+    {(expandTags[d.name] ? d.tags : d.tags.slice(0,4)).map((t,i)=> {
+      const cls = tagClassFor(String(t));
+      return (
+        <span key={i} className={`text-[10px] px-1.5 py-0.5 rounded border ${cls}`}>
+          {t}
+        </span>
+      );
+    })}
+
+    {d.tags.length>4 && !expandTags[d.name] && (
+      <button
+        type="button"
+        className="text-[10px] px-1.5 py-0.5 rounded border bg-white text-gray-700 underline"
+        onClick={()=>toggleTags(d.name)}
+      >
+        ＋{d.tags.length-4}
+      </button>
+    )}
+
+    {expandTags[d.name] && (
+      <button
+        type="button"
+        className="text-[10px] px-1.5 py-0.5 rounded border bg-white text-gray-500"
+        onClick={()=>toggleTags(d.name)}
+      >
+        閉じる
+      </button>
+    )}
+  </div>
+)}
 
               {/* 詳細（ℹ︎）を折りたたみ：長文説明・仕様・出典 */}
               <details className="mt-1">
