@@ -17,7 +17,7 @@ import {
   Scatter,
 } from "recharts";
 import { flagify, flagifyOriginList, splitOrigins } from "../utils/flags";
-import { getOptimizedRecipe } from '../logic/recipeEngine'
+import { getOptimizedRecipe } from '../utils/recipeEngine'
 import { filterSortBeans, beanOptionLabel, ROASTS } from "../utils/beanFilters";
 import { ORIGINS } from "../constants/origins";
 import { ORIGIN_THEORIES } from "../constants/originTheories";
