@@ -1189,41 +1189,46 @@ const DripperExplainer: React.FC<{name:string; bean:any; brewDate?:string}> = ({
           </span>
         ))}
       </div>
-      {/* ▼▼ ここから：折りたたみ枠 ▼▼ */}
-<details className="mt-1.5 group" defaultChecked={false}>
+
+
+
+
+
+      
+{/* ▼▼ 折りたたみ（最適手法・相性の例） ▼▼ */}
+<details className="mt-1.5 group">
   <summary className="text-[12px] text-gray-700 cursor-pointer select-none">
     最適手法・相性の例を開く
     <span className="text-[11px] text-gray-500 ml-1">(クリックで展開)</span>
   </summary>
 
-  {/* 最適手法（いま出しているブロックを中へ移動） */}
+  {/* 最適手法（要点） */}
   <div className="mt-1.5 text-[12px] leading-5 text-gray-800">
+    <div>
+      最適手法：粒度 <b>{k.howto.grindGroup}</b>
+      ／ 目安温度 <b>{Number.isFinite(t)?`${t}℃`:'—'}</b>
+      ／ 目安時間 <b>{s}</b>
+    </div>
+    <div className="text-[11px] text-gray-600">
+      {k.howto.pour ? `注湯：${k.howto.pour}` : ''} {k.howto.ratioHint ? `／ レシオ目安：${k.howto.ratioHint}` : ''}
+    </div>
+  </div>
 
-      {/* 最適手法（豆条件で最適化済み値を表出） */}
-      <div className="text-[12px] leading-5 text-gray-800">
-        <div>
-          最適手法：粒度 <b>{rec.grindGroup}</b> ／ 目安温度 <b>{Number.isFinite(t!)?`${t}℃`:'—'}</b> ／ 目安時間 <b>{s}</b>
-        </div>
-        <div className="text-[11px] text-gray-600">
-          {rec.pour ? `注湯：${rec.pour}` : ''} {rec.ratioHint ? `／ レシオ目安：${rec.ratioHint}` : ''}
-        </div>
-      </div>
-</div>
-      {/* 相性の例は折りたたみ表示（要望対応） */}
-     {k.examples?.length > 0 && (
+  {/* 相性の例 */}
+  {k.examples?.length > 0 ? (
     <div className="mt-1.5">
       <div className="text-[12px] font-medium text-gray-700">相性の例</div>
       <div className="mt-1 flex flex-wrap gap-1.5">
-        {k.examples.map((ex, i) => (
+        {k.examples.map((ex, i)=>(
           <span key={i} className="text-[10px] px-1.5 py-0.5 rounded border bg-white text-gray-700">
             {ex.origin}・{ex.process}／{ex.roast} — {ex.flavor}
           </span>
         ))}
       </div>
     </div>
-  )}
+  ) : null}
 </details>
-      )}
+{/* ▲▲ 折りたたみ（最適手法・相性の例） ▲▲ */}
 
       {/* 根拠（導出理由） */}
       {!!rec.trace?.length && (
