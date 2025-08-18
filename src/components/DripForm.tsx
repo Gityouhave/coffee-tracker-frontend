@@ -1191,26 +1191,40 @@ const DripperExplainer: React.FC<{ name: string; bean: any }> = ({
     base,
   };
 
- // ← ここで最適化！（安全マージ）
-const derived = deriveOptimalRecipe(ctx) || ({} as any);
-const opt = {
-  ...base,
-  ...derived,
-  // 入れ子オブジェクトは個別にマージ＆フォールバック
-  pour: {
-    style: derived?.pour?.style ?? base.pour.style,
-    notes: derived?.pour?.notes ?? base.pour.notes,
-  },
-  // 数値は undefined/NaN を弾く
-  tempC: Number.isFinite(derived?.tempC) ? Number(derived.tempC) : base.tempC,
-  timeSec: Number.isFinite(derived?.timeSec) ? Number(derived.timeSec) : base.timeSec,
-  ratio: Number.isFinite(derived?.ratio) ? Number(derived.ratio) : base.ratio,
-} as typeof base & typeof derived;
+// ← ここで最適化！（安全マージ）
+type OptimalRecipe = {
+  grindGroup: string;
+  tempC: number;
+  timeSec: number;
+  ratio: number;
+  pour: { style: string; notes?: string[] };
+};
+const safeNum = (v: any, def: number) =>
+  Number.isFinite(Number(v)) ? Number(v) : def;
+const safeStr = (v: any, def: string) =>
+  typeof v === "string" && v.trim() ? v : def;
 
-  // 表示用
-const safeTime = Number.isFinite(opt?.timeSec) ? Number(opt.timeSec) : base.timeSec;
-const mm = Math.floor(safeTime / 60);
-const ss = String(safeTime % 60).padStart(2, "0");
+const optRaw = (typeof deriveOptimalRecipe === "function"
+  ? deriveOptimalRecipe(ctx)
+  : null) as Partial<OptimalRecipe> | null;
+
+const opt: OptimalRecipe = {
+  grindGroup: optRaw?.grindGroup ?? base.grindGroup,
+  tempC: safeNum(optRaw?.tempC, base.tempC),
+  timeSec: safeNum(optRaw?.timeSec, base.timeSec),
+  ratio: safeNum(optRaw?.ratio, base.ratio),
+  pour: {
+    style: safeStr(optRaw?.pour?.style, base.pour?.style ?? "pulse"),
+    notes: Array.isArray(optRaw?.pour?.notes) ? optRaw!.pour!.notes! : [],
+  },
+};
+
+// 表示用（NaN防止）
+const mm = Math.floor(opt.timeSec / 60);
+const ss = String(Math.max(0, Math.round(opt.timeSec) % 60)).padStart(2, "0");
+const ratioText = Number.isFinite(opt.ratio)
+  ? (opt.ratio as number).toFixed(1)
+  : String(base.ratio);
 
   return (
     <div className="mt-1.5 space-y-1">
