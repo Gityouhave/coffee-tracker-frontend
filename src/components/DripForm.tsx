@@ -4084,6 +4084,13 @@ const DripperList: React.FC<{
                   #{d.rank}
                 </span>
                 <b className="text-[15px]">{d.name}</b>
+                n={Number(d.n || 0)}
+                <span className="text-[11px] px-1.5 py-0.5 rounded border bg-gray-50">
+                  総合 {d.score}
+                </span>
+              </div>
+              <div className="flex items-center gap-2">
+                <b className="text-[15px]">{d.name}</b>
                 <span className="text-xs text-gray-600 truncate">
                   — {d.short}
                 </span>
@@ -4092,12 +4099,7 @@ const DripperList: React.FC<{
                   className={`ml-auto text-[10px] px-1.5 py-0.5 rounded border ${nBadgeClass(
                     Number(d.n || 0)
                   )}`}
-                >
-                  n={Number(d.n || 0)}
-                </span>
-                <span className="text-[11px] px-1.5 py-0.5 rounded border bg-gray-50">
-                  総合 {d.score}
-                </span>
+                ></span>
               </div>
 
               {/* 2行目：推奨レシピ＆相性の例は折りたたみ */}
@@ -4267,14 +4269,14 @@ const DripperList: React.FC<{
                   )}
                 </div>
               </details>
-               <details className="flex-1">
-                  <summary className="cursor-pointer select-none text-[12px] text-gray-700">
-                    推奨レシピ・相性の例
-                  </summary>
-                  <div className="pt-1.5">
-                    <DripperExplainer name={d.name} bean={bean} />
-                  </div>
-                </details>
+              <details className="flex-1">
+                <summary className="cursor-pointer select-none text-[12px] text-gray-700">
+                  推奨レシピ・相性の例
+                </summary>
+                <div className="pt-1.5">
+                  <DripperExplainer name={d.name} bean={bean} />
+                </div>
+              </details>
             </li>
           );
         })}
