@@ -1044,3 +1044,5 @@ const DRIPPER_RUNTIME: Record<
   フラワー: { timeFactor: 1.0, tempOffset: 0 },
   コーノ: { timeFactor: 1.05, tempOffset: -1 },
 };
+
+export type DripperId = keyof typeof DRIPPER_DETAILS;
