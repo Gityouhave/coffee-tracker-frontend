@@ -1,3 +1,21 @@
+// constants/drippers.ts の先頭あたりに型を定義
+export type DripperDetail = {
+  short: string;
+  desc: string;
+  tags: string[];
+};
+export type DripperKnowhow = {
+  pros: string[];
+  cons: string[];
+  howto: { grindGroup: string; tempC: number; time: string; pour: string; ratioHint: string };
+  examples: Array<{ origin: string; process: string; roast: string; flavor: string }>;
+};
+export type DripperEvidence = {
+  features: string[];
+  qualitative: string[];
+  sources: Array<{ title: string; url: string }>;
+};
+
 const DRIPPER_DETAILS: Record<string, DripperDetail> = {
   ハリオ: {
     short: "クリアで酸を活かす",
