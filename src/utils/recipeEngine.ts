@@ -1,5 +1,44 @@
 // src/logic/recipeEngine.ts
-// 豆条件（産地/焙煎度/精製/追加処理/エイジング）×ドリッパーから最適レシピを導出し、根拠も返す
+import { DRIPPER_PROFILE } from '@/constants/drippers';
+import { ORIGINS_META, type RoastBand, type Process } from '@/constants/origins';
+
+type Conditions = { origin?: string; roast?: RoastBand; process?: Process; agingDays?: number };
+type ScoreLine = { label: string; sign: '+'|'-' };
+export function recommendTop5ByConditions(
+  /* beanId */ _a: any,
+  /* history */ _b: any,
+  cond: Conditions,
+  _policy: 'overall'|'clarity'|'body' = 'overall'
+){
+  // 超簡易: 産地メタと器具プロファイルの相性をざっくりスコア
+  const origin = cond.origin && ORIGINS_META[cond.origin];
+  const candidates = Object.entries(DRIPPER_PROFILE);
+  const scored = candidates.map(([name, p])=>{
+    let score = 50;
+
+    // 焙煎×器具の相性（例: 浸漬は中深〜深で加点、クリア系は浅で加点）
+    if (cond.roast === '浅' || cond.roast === '中浅') score += Math.round(p.clarity*20 - p.immersion*10);
+    if (cond.roast === '中深' || cond.roast === '深') score += Math.round(p.immersion*25 + p.body*10);
+
+    // 産地が高香り系なら clarity を少し重視
+    if (origin?.baseline.aroma === '強') score += Math.round(p.clarity*10);
+
+    // aging（焙煎後日数）が長いほど immersion 寄りを少し加点
+    if (typeof cond.agingDays === 'number') score += Math.round(Math.min(cond.agingDays,14)/14 * p.immersion * 10);
+
+    const reasons2: ScoreLine[] = [];
+    if ((cond.roast==='浅'||cond.roast==='中浅') && p.clarity>0.7) reasons2.push({label:'浅煎り×透明感', sign:'+'});
+    if ((cond.roast==='中深'||cond.roast==='深') && p.immersion>0.6) reasons2.push({label:'深煎り×浸漬/ボディ', sign:'+'});
+    if (origin?.baseline.aroma==='強' && p.clarity<0.5) reasons2.push({label:'香り重視だがクリーン不足', sign:'-'});
+
+    const short = `clarity:${p.clarity.toFixed(2)} / body:${p.body.toFixed(2)} / immersion:${p.immersion.toFixed(2)}`;
+    const metaReasons = origin ? [`${cond.origin}は${origin.baseline.notes.slice(0,2).join('・')}が出やすい`] : [];
+
+    return { name, score, short, reasons2, metaReasons };
+  });
+
+  return scored.sort((a,b)=>b.score-a.score).slice(0,5);
+}
 
 export type BeanLike = {
   origin?: string;           // "エチオピア, ケニア" など複数可
