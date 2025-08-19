@@ -1,7 +1,7 @@
 // src/components/OriginAccordion.tsx
 import React from 'react';
 import { flagify } from '@/utils/flags';
-import { ORIGINS_META } from '@/data/origins';
+import { ORIGINS_META } from '@/constants/origins';
 import { recommendTop5ByConditions } from '@/logic/recipeEngine';
 
 export const OriginAccordion: React.FC<{
