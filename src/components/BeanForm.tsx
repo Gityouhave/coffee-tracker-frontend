@@ -4,6 +4,8 @@ import { ORIGIN_THEORIES } from '../constants/originTheories'
 import { filterSortBeans, beanOptionLabel } from '../utils/beanFilters'
 import { ORIGINS } from '../constants/origins'
 import { flagify, flagifyOriginLine } from '../utils/flags'
+// BeanForm.tsx（右カラムの「欠落産地」節）
+import { OriginAccordion } from '@/components/OriginAccordion';
 
 const PROCESS_OPTIONS = [
   '不明','ナチュラル','ウォッシュド','ハニー','レッドハニー','イエローハニー','ホワイトハニー','スマトラ'
