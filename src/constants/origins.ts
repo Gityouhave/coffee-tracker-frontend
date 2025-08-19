@@ -1,8 +1,7 @@
-// src/constants/origins.ts
-
-// src/data/origins.ts
+// constants/origins.ts
+import type { DripperId } from './drippers'; // ← 相対に変更
 export type RoastBand = '浅'|'中浅'|'中'|'中深'|'深';
-export type Process = 'ウォッシュト'|'ナチュラル'|'ハニー'|'ウェットハル'|'発酵系';
+export type Process = 'ウォッシュト'|'ナチュラル'|'ハニー'|'ウェットハル'|'発酵系'|'ウェットハル';
 
 export type OriginProfile = {
   region: 'アフリカ'|'中米'|'南米'|'アジア';
@@ -19,7 +18,7 @@ export type OriginProfile = {
     tips?: string[]; // 焙煎/レシピの注意
   }>;
   recommended: Array<{
-    dripper: import('./drippers').DripperId;
+    dripper: DripperId;
     why: string;      // 理由（産地×焙煎×精製と結び付けた説明）
     bestFor: RoastBand[];     // この範囲で特に効く
     processFit?: Process[];   // 相性の良い精製
