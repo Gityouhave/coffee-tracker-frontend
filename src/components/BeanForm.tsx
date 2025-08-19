@@ -6,6 +6,17 @@ import { ORIGINS } from '../constants/origins'
 import { flagify, flagifyOriginLine } from '../utils/flags'
 // BeanForm.tsx（右カラムの「欠落産地」節）
 import { OriginAccordion } from '@/components/OriginAccordion';
+// BeanForm.tsx （欠落産地のリストを描画している部分）
+{/* 例）missingOrigins: string[] を持っている前提 */}
+<div className="space-y-2">
+  {missingOrigins.map(o => (
+    <OriginAccordion key={o} origin={o} onApply={(dripper)=>{
+      // ここで「この器具で試す」を押した時の挙動
+      // 例：ドリップフォーム画面に遷移 or コンテキストに器具名をセット
+      console.log('apply dripper', dripper);
+    }} />
+  ))}
+</div>
 
 const PROCESS_OPTIONS = [
   '不明','ナチュラル','ウォッシュド','ハニー','レッドハニー','イエローハニー','ホワイトハニー','スマトラ'
